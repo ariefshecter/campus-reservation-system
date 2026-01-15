@@ -7,6 +7,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"campus-reservation-backend/internal/auth"
+	"campus-reservation-backend/internal/booking"
 	"campus-reservation-backend/internal/database"
 	"campus-reservation-backend/internal/facility"
 )
@@ -88,6 +89,42 @@ func main() {
 		auth.JWTProtected(),
 		auth.RequireRole("admin"),
 		facility.DeactivateHandler(db),
+	)
+
+	// ==========================
+	// BOOKING ROUTES
+	// ==========================
+
+	// USER: CREATE BOOKING
+	app.Post(
+		"/bookings",
+		auth.JWTProtected(),
+		auth.RequireRole("user"),
+		booking.CreateHandler(db),
+	)
+
+	// USER: LIST OWN BOOKINGS
+	app.Get(
+		"/bookings/me",
+		auth.JWTProtected(),
+		auth.RequireRole("user"),
+		booking.MyBookingsHandler(db),
+	)
+
+	// USER: CANCEL BOOKING (PENDING ONLY)
+	app.Delete(
+		"/bookings/:id",
+		auth.JWTProtected(),
+		auth.RequireRole("user"),
+		booking.CancelHandler(db),
+	)
+
+	// ADMIN: APPROVE / REJECT BOOKING
+	app.Patch(
+		"/bookings/:id/status",
+		auth.JWTProtected(),
+		auth.RequireRole("admin"),
+		booking.UpdateStatusHandler(db),
 	)
 
 	// ==========================

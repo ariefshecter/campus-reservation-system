@@ -20,8 +20,16 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// Panggil service
-		if err := CreateFacility(db, f); err != nil {
+		// Ambil user_id dari JWT (diset oleh middleware auth)
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "user tidak terautentikasi",
+			})
+		}
+
+		// Panggil service dengan userID
+		if err := CreateFacility(db, f, userID); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
@@ -38,6 +46,7 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 // ==========================
 func ListHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		// Public read, tidak butuh user_id untuk audit log
 		data, err := GetAllFacilities(db)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -64,8 +73,16 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// Panggil service
-		if err := UpdateFacility(db, id, f); err != nil {
+		// Ambil user_id dari JWT
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "user tidak terautentikasi",
+			})
+		}
+
+		// Panggil service dengan userID
+		if err := UpdateFacility(db, id, f, userID); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
@@ -84,7 +101,16 @@ func DeactivateHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 
-		if err := DeactivateFacility(db, id); err != nil {
+		// Ambil user_id dari JWT
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "user tidak terautentikasi",
+			})
+		}
+
+		// Panggil service dengan userID
+		if err := DeactivateFacility(db, id, userID); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})

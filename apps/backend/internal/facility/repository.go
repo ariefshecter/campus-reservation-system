@@ -2,7 +2,6 @@ package facility
 
 import (
 	"database/sql"
-	"errors"
 )
 
 // ==========================
@@ -18,17 +17,18 @@ type Facility struct {
 }
 
 // ==========================
-// INSERT FASILITAS
+// INSERT FASILITAS (Audit: created_by)
 // ==========================
-func Insert(db *sql.DB, f Facility) error {
+func Insert(db *sql.DB, f Facility, userID string) error {
 	_, err := db.Exec(`
-		INSERT INTO facilities (name, capacity, price, photo_url)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO facilities (name, capacity, price, photo_url, created_by)
+		VALUES ($1, $2, $3, $4, $5)
 	`,
 		f.Name,
 		f.Capacity,
 		f.Price,
 		f.PhotoURL,
+		userID, // Mengisi kolom created_by
 	)
 
 	return err
@@ -38,10 +38,12 @@ func Insert(db *sql.DB, f Facility) error {
 // GET SEMUA FASILITAS AKTIF
 // ==========================
 func FindAllActive(db *sql.DB) ([]Facility, error) {
+	// Filter: is_active = true DAN belum dihapus (deleted_at IS NULL)
 	rows, err := db.Query(`
 		SELECT id, name, capacity, price, photo_url, is_active
 		FROM facilities
-		WHERE is_active = true
+		WHERE is_active = true 
+		AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -72,22 +74,25 @@ func FindAllActive(db *sql.DB) ([]Facility, error) {
 }
 
 // ==========================
-// UPDATE FASILITAS
+// UPDATE FASILITAS (Audit: updated_by)
 // ==========================
-func Update(db *sql.DB, id string, f Facility) error {
+func Update(db *sql.DB, id string, f Facility, userID string) error {
+	// Update hanya jika data belum dihapus (deleted_at IS NULL)
 	_, err := db.Exec(`
 		UPDATE facilities
 		SET name = $1,
-		    capacity = $2,
-		    price = $3,
-		    photo_url = $4,
-		    updated_at = now()
-		WHERE id = $5
+			capacity = $2,
+			price = $3,
+			photo_url = $4,
+			updated_at = now(),
+			updated_by = $5
+		WHERE id = $6 AND deleted_at IS NULL
 	`,
 		f.Name,
 		f.Capacity,
 		f.Price,
 		f.PhotoURL,
+		userID, // Mengisi kolom updated_by
 		id,
 	)
 
@@ -95,49 +100,18 @@ func Update(db *sql.DB, id string, f Facility) error {
 }
 
 // ==========================
-// NONAKTIFKAN FASILITAS (SOFT DELETE)
+// SOFT DELETE FASILITAS (Audit: deleted_by)
 // ==========================
-func Deactivate(db *sql.DB, id string) error {
+// Menggantikan fungsi Deactivate sebelumnya
+func SoftDelete(db *sql.DB, id string, userID string) error {
+	// Tidak melakukan DELETE fisik, tapi update timestamp dan status
 	_, err := db.Exec(`
 		UPDATE facilities
 		SET is_active = false,
-		    updated_at = now()
-		WHERE id = $1
-	`, id)
+			deleted_at = now(),
+			deleted_by = $1
+		WHERE id = $2 AND deleted_at IS NULL
+	`, userID, id) // Mengisi kolom deleted_by
 
 	return err
-}
-
-// ==========================
-// UPDATE FASILITAS (LOGIKA)
-// ==========================
-func UpdateFacility(db *sql.DB, id string, f Facility) error {
-	if id == "" {
-		return errors.New("id fasilitas tidak valid")
-	}
-
-	if f.Name == "" {
-		return errors.New("nama fasilitas wajib diisi")
-	}
-
-	if f.Capacity <= 0 {
-		return errors.New("kapasitas harus lebih dari 0")
-	}
-
-	if f.Price < 0 {
-		return errors.New("harga tidak boleh negatif")
-	}
-
-	return Update(db, id, f)
-}
-
-// ==========================
-// NONAKTIFKAN FASILITAS
-// ==========================
-func DeactivateFacility(db *sql.DB, id string) error {
-	if id == "" {
-		return errors.New("id fasilitas tidak valid")
-	}
-
-	return Deactivate(db, id)
 }
