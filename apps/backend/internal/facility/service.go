@@ -13,17 +13,22 @@ func CreateFacility(db *sql.DB, f Facility, userID string) error {
 	if f.Name == "" {
 		return errors.New("nama fasilitas wajib diisi")
 	}
-
+	// TAMBAHAN VALIDASI
+	if f.Description == "" {
+		return errors.New("deskripsi fasilitas wajib diisi")
+	}
+	if f.Location == "" {
+		return errors.New("lokasi fasilitas wajib diisi")
+	}
 	if f.Capacity <= 0 {
 		return errors.New("kapasitas harus lebih dari 0")
 	}
-
 	// Harga boleh 0 (gratis), tapi tidak boleh negatif
 	if f.Price < 0 {
 		return errors.New("harga tidak boleh negatif")
 	}
 
-	// 2. Panggil repository dengan userID untuk audit created_by
+	// 2. Panggil repository
 	return Insert(db, f, userID)
 }
 
@@ -31,8 +36,8 @@ func CreateFacility(db *sql.DB, f Facility, userID string) error {
 // GET LIST FASILITAS
 // ==========================
 func GetAllFacilities(db *sql.DB) ([]Facility, error) {
-	// Tidak butuh validasi khusus untuk read public
-	return FindAllActive(db)
+	// PERBAIKAN: Menggunakan FindAll (bukan FindAllActive lagi)
+	return FindAll(db)
 }
 
 // ==========================
@@ -44,31 +49,48 @@ func UpdateFacility(db *sql.DB, id string, f Facility, userID string) error {
 		return errors.New("id fasilitas tidak valid")
 	}
 
-	// 2. Validasi Data (sama seperti Create)
+	// 2. Validasi Data
 	if f.Name == "" {
 		return errors.New("nama fasilitas wajib diisi")
 	}
-
+	if f.Description == "" {
+		return errors.New("deskripsi fasilitas wajib diisi")
+	}
+	if f.Location == "" {
+		return errors.New("lokasi fasilitas wajib diisi")
+	}
 	if f.Capacity <= 0 {
 		return errors.New("kapasitas harus lebih dari 0")
 	}
-
 	if f.Price < 0 {
 		return errors.New("harga tidak boleh negatif")
 	}
 
-	// 3. Panggil repository dengan userID untuk audit updated_by
+	// 3. Panggil repository
 	return Update(db, id, f, userID)
 }
 
 // ==========================
-// NONAKTIFKAN FASILITAS (LOGIKA)
+// DELETE FASILITAS (PERMANEN)
 // ==========================
-func DeactivateFacility(db *sql.DB, id string, userID string) error {
+// Menggantikan fungsi DeactivateFacility yang lama
+func DeleteFacility(db *sql.DB, id string) error {
 	if id == "" {
 		return errors.New("id fasilitas tidak valid")
 	}
 
-	// Panggil repository dengan userID untuk audit deleted_by
-	return SoftDelete(db, id, userID)
+	// PERBAIKAN: Menggunakan HardDelete (bukan SoftDelete)
+	return HardDelete(db, id)
+}
+
+// ==========================
+// TOGGLE STATUS (AKTIF/NONAKTIF)
+// ==========================
+// Fungsi Baru untuk switch status
+func ToggleFacilityStatus(db *sql.DB, id string, isActive bool, userID string) error {
+	if id == "" {
+		return errors.New("id fasilitas tidak valid")
+	}
+
+	return ToggleActive(db, id, isActive, userID)
 }

@@ -2,122 +2,170 @@ package facility
 
 import (
 	"database/sql"
+	"fmt"
+	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 // ==========================
-// CREATE FASILITAS (ADMIN)
+// CREATE FASILITAS
 // ==========================
 func CreateHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var f Facility
+		userID := c.Locals("user_id").(string)
 
-		// Parse body JSON
-		if err := c.BodyParser(&f); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "format data tidak valid",
-			})
+		// 1. Ambil Data Form
+		name := c.FormValue("name")
+		description := c.FormValue("description")
+		location := c.FormValue("location")
+
+		// Konversi String ke Angka (Karena FormData selalu string)
+		capacity, _ := strconv.Atoi(c.FormValue("capacity"))
+		price, _ := strconv.ParseFloat(c.FormValue("price"), 64)
+
+		// 2. Handle Upload Foto
+		var photoURL string
+		file, err := c.FormFile("photo")
+
+		if err == nil {
+			// Buat nama file unik: timestamp-namafile
+			filename := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
+
+			// Simpan ke folder uploads
+			savePath := filepath.Join("./uploads", filename)
+			if err := c.SaveFile(file, savePath); err == nil {
+				// Set URL
+				photoURL = fmt.Sprintf("http://localhost:3000/uploads/%s", filename)
+			}
 		}
 
-		// Ambil user_id dari JWT (diset oleh middleware auth)
-		userID, ok := c.Locals("user_id").(string)
-		if !ok || userID == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "user tidak terautentikasi",
-			})
+		// 3. Simpan ke DB
+		f := Facility{
+			Name:        name,
+			Description: description,
+			Location:    location,
+			Capacity:    capacity,
+			Price:       price,
+			PhotoURL:    photoURL,
 		}
 
-		// Panggil service dengan userID
 		if err := CreateFacility(db, f, userID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"message": "fasilitas berhasil dibuat",
-		})
+		return c.Status(201).JSON(fiber.Map{"message": "Fasilitas berhasil dibuat"})
 	}
 }
 
 // ==========================
-// LIST FASILITAS (USER & ADMIN)
+// LIST FASILITAS (ADMIN & USER)
 // ==========================
 func ListHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Public read, tidak butuh user_id untuk audit log
-		data, err := GetAllFacilities(db)
+		// Menggunakan repository FindAll yang baru
+		data, err := FindAll(db)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "gagal mengambil data fasilitas",
-			})
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal ambil data"})
 		}
-
 		return c.JSON(data)
 	}
 }
 
 // ==========================
-// UPDATE FASILITAS (ADMIN)
+// UPDATE FASILITAS (EDIT FULL)
 // ==========================
 func UpdateHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
-		var f Facility
+		userID := c.Locals("user_id").(string)
 
-		// Parse body
-		if err := c.BodyParser(&f); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "format data tidak valid",
-			})
+		// 1. Ambil data lama dulu (untuk cek foto lama)
+		oldData, err := FindByID(db, id)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Fasilitas tidak ditemukan"})
 		}
 
-		// Ambil user_id dari JWT
-		userID, ok := c.Locals("user_id").(string)
-		if !ok || userID == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "user tidak terautentikasi",
-			})
+		// 2. Ambil Data Baru dari Form
+		name := c.FormValue("name")
+		description := c.FormValue("description")
+		location := c.FormValue("location")
+		capacity, _ := strconv.Atoi(c.FormValue("capacity"))
+		price, _ := strconv.ParseFloat(c.FormValue("price"), 64)
+
+		// 3. Cek Foto Baru
+		photoURL := oldData.PhotoURL // Default: Pakai foto lama
+		file, err := c.FormFile("photo")
+
+		if err == nil {
+			// Ada foto baru, simpan dan ganti URL
+			filename := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
+			savePath := filepath.Join("./uploads", filename)
+			if err := c.SaveFile(file, savePath); err == nil {
+				photoURL = fmt.Sprintf("http://localhost:3000/uploads/%s", filename)
+			}
 		}
 
-		// Panggil service dengan userID
-		if err := UpdateFacility(db, id, f, userID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+		// 4. Update Database
+		newData := Facility{
+			Name:        name,
+			Description: description,
+			Location:    location,
+			Capacity:    capacity,
+			Price:       price,
+			PhotoURL:    photoURL,
 		}
 
-		return c.JSON(fiber.Map{
-			"message": "fasilitas berhasil diperbarui",
-		})
+		if err := Update(db, id, newData, userID); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.JSON(fiber.Map{"message": "Fasilitas berhasil diperbarui"})
 	}
 }
 
 // ==========================
-// NONAKTIFKAN FASILITAS (ADMIN)
+// DELETE PERMANEN
 // ==========================
-func DeactivateHandler(db *sql.DB) fiber.Handler {
+func DeleteHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 
-		// Ambil user_id dari JWT
-		userID, ok := c.Locals("user_id").(string)
-		if !ok || userID == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "user tidak terautentikasi",
-			})
+		if err := HardDelete(db, id); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"message": "Fasilitas dihapus permanen"})
+	}
+}
+
+// ==========================
+// TOGGLE STATUS (AKTIF/NONAKTIF)
+// ==========================
+func ToggleStatusHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		userID := c.Locals("user_id").(string)
+
+		// Baca JSON body: { "is_active": true/false }
+		var req struct {
+			IsActive bool `json:"is_active"`
 		}
 
-		// Panggil service dengan userID
-		if err := DeactivateFacility(db, id, userID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Format JSON salah"})
 		}
 
-		return c.JSON(fiber.Map{
-			"message": "fasilitas berhasil dinonaktifkan",
-		})
+		if err := ToggleActive(db, id, req.IsActive, userID); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		msg := "Fasilitas dinonaktifkan"
+		if req.IsActive {
+			msg = "Fasilitas diaktifkan"
+		}
+
+		return c.JSON(fiber.Map{"message": msg})
 	}
 }
