@@ -25,26 +25,23 @@ func CreateBooking(db *sql.DB, b Booking) error {
 	}
 
 	// ---------------------------------------------------------
-	// FITUR BARU: Cek Ketersediaan Spesifik
+	// FITUR: Cek Ketersediaan Spesifik
 	// ---------------------------------------------------------
-	// Mengecek apakah ada booking lain yang menghalangi di rentang waktu ini
 	conflictEndTime, err := FindOverlappingBooking(db, b.FacilityID, b.StartTime, b.EndTime)
 	if err != nil {
 		return errors.New("gagal mengecek ketersediaan ruangan")
 	}
 
 	if conflictEndTime != nil {
-		// Jika ada tabrakan, ambil waktu selesainya dan format ke "Jam:Menit" (Contoh: 12:00)
+		// Jika ada tabrakan, ambil waktu selesainya
 		nextAvailable := conflictEndTime.Format("15:04")
 		return fmt.Errorf("ruangan telah terbooking, dapat digunakan lagi setelah pukul %s", nextAvailable)
 	}
 	// ---------------------------------------------------------
 
 	// 2. Insert booking via Repository
-	// Repository akan otomatis set created_by = b.UserID
 	err = Insert(db, b)
 	if err != nil {
-		// Tangani constraint PostgreSQL (sebagai safety net terakhir)
 		msg := err.Error()
 
 		if strings.Contains(msg, "no_double_booking") {
@@ -63,26 +60,21 @@ func CreateBooking(db *sql.DB, b Booking) error {
 
 // ==========================
 // CANCEL BOOKING (USER)
-// Hanya boleh jika status masih pending
 // ==========================
 func CancelBooking(db *sql.DB, bookingID string, userID string) error {
-	// 1. Cek detail booking via Repository
 	status, owner, err := FindByID(db, bookingID)
 	if err != nil {
 		return errors.New("booking tidak ditemukan")
 	}
 
-	// 2. Validasi kepemilikan
 	if owner != userID {
 		return errors.New("tidak punya hak membatalkan booking ini")
 	}
 
-	// 3. Validasi status
 	if status != "pending" {
 		return errors.New("hanya booking pending yang bisa dibatalkan")
 	}
 
-	// 4. Lakukan cancel via Repository (audit updated_by = userID)
 	return UpdateStatusCancel(db, bookingID, userID)
 }
 
@@ -90,30 +82,26 @@ func CancelBooking(db *sql.DB, bookingID string, userID string) error {
 // APPROVE / REJECT BOOKING (ADMIN)
 // ==========================
 func UpdateBookingStatus(db *sql.DB, bookingID string, newStatus string, adminID string) error {
-	// 1. Validasi input status
 	if newStatus != "approved" && newStatus != "rejected" {
 		return errors.New("status tidak valid")
 	}
 
-	// 2. Cek status saat ini via Repository
 	currentStatus, _, err := FindByID(db, bookingID)
 	if err != nil {
 		return errors.New("booking tidak ditemukan")
 	}
 
-	// 3. Pastikan hanya pending yang bisa diubah
 	if currentStatus != "pending" {
 		return errors.New("status booking tidak bisa diubah karena sudah diproses")
 	}
 
-	// 4. Update status via Repository (audit updated_by = adminID)
 	return UpdateStatus(db, bookingID, newStatus, adminID)
 }
 
 // ==========================
 // GET USER BOOKINGS
 // ==========================
-func GetUserBookings(db *sql.DB, userID string) ([]Booking, error) {
-	// Panggil Repository
+
+func GetUserBookings(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return FindByUserID(db, userID)
 }

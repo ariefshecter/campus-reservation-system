@@ -133,7 +133,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-7">
         
-        {/* 2. GRAFIK JAM SIBUK (Baru - Lebar 4/7) */}
+        {/* 2. GRAFIK JAM SIBUK (FIXED) */}
         <Card className="col-span-4">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -144,23 +144,29 @@ export default function DashboardPage() {
             <CardContent>
                 <div className="h-[200px] w-full flex items-end justify-between gap-2 pt-4">
                     {peakHours.map((item, i) => {
-                        // Hitung tinggi batang dalam persen (relatif terhadap nilai max)
                         const heightPercentage = Math.round((item.count / maxCount) * 100)
                         
                         return (
                             <div key={i} className="flex flex-col items-center gap-2 w-full group">
-                                <div className="relative w-full flex items-end justify-center h-[160px] bg-slate-50 rounded-t-md overflow-hidden">
-                                    {/* Batang Grafik */}
-                                    <div 
-                                        className="w-4/5 bg-indigo-500 rounded-t-sm transition-all duration-500 hover:bg-indigo-600 group-hover:w-full"
-                                        style={{ height: `${heightPercentage}%` }}
-                                    ></div>
+                                {/* Container Relative untuk Grafik & Tooltip */}
+                                <div className="relative w-full h-[160px] flex items-end justify-center">
                                     
-                                    {/* Tooltip Angka (Muncul saat hover) */}
-                                    <div className="absolute -top-8 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {/* TOOLTIP: Dipindah ke sini (sebelum overflow-hidden) agar tidak terpotong */}
+                                    {/* Ditambah 'pointer-events-none' agar tidak mengganggu hover mouse */}
+                                    <div className="absolute -top-8 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap pointer-events-none mb-1">
                                         {item.count} Booking
                                     </div>
+
+                                    {/* TRACK BACKGROUND (Tetap overflow-hidden untuk rounded corner bawah) */}
+                                    <div className="w-full h-full bg-slate-50 rounded-t-md overflow-hidden flex items-end justify-center">
+                                        {/* Batang Grafik */}
+                                        <div 
+                                            className="w-4/5 bg-indigo-500 rounded-t-sm transition-all duration-500 hover:bg-indigo-600 group-hover:w-full"
+                                            style={{ height: `${heightPercentage}%` }}
+                                        ></div>
+                                    </div>
                                 </div>
+                                
                                 {/* Label Jam */}
                                 <span className="text-xs text-slate-500 font-medium">
                                     {item.hour < 10 ? `0${item.hour}` : item.hour}:00
