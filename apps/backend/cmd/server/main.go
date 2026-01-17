@@ -9,6 +9,7 @@ import (
 
 	"campus-reservation-backend/internal/auth"
 	"campus-reservation-backend/internal/booking"
+	"campus-reservation-backend/internal/dashboard"
 	"campus-reservation-backend/internal/database"
 	"campus-reservation-backend/internal/facility"
 	"campus-reservation-backend/internal/user" // PENTING: Import ini diperlukan untuk route user
@@ -109,7 +110,8 @@ func main() {
 	app.Delete("/users/:id", auth.JWTProtected(), auth.RequireRole("admin"), user.DeleteUserHandler(db))
 
 	// ==========================
-	// 9. START SERVER
+	// 9. DASHBOARD STATS (ADMIN ONLY)
+	app.Get("/dashboard/stats", auth.JWTProtected(), auth.RequireRole("admin"), dashboard.DashboardHandler(db))
 	// ==========================
 	log.Println("Server running on port 3000")
 	log.Fatal(app.Listen(":3000"))
