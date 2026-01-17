@@ -62,10 +62,15 @@ func main() {
 	// 5. PROTECTED ROUTES (JWT)
 	// ==========================
 	app.Get("/me", auth.JWTProtected(), func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"user_id": c.Locals("user_id"),
-			"role":    c.Locals("role"),
-		})
+		userID := c.Locals("user_id").(string)
+
+		// Ambil data lengkap user dari database menggunakan repository
+		userData, err := user.FindByID(db, userID)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
+		}
+
+		return c.JSON(userData)
 	})
 
 	// ==========================
@@ -100,6 +105,8 @@ func main() {
 	// ==========================
 	// Agar menu "Data Pengguna" bisa berjalan
 	app.Get("/users", auth.JWTProtected(), auth.RequireRole("admin"), user.ListHandler(db))
+	app.Patch("/users/:id/role", auth.JWTProtected(), auth.RequireRole("admin"), user.UpdateRoleHandler(db))
+	app.Delete("/users/:id", auth.JWTProtected(), auth.RequireRole("admin"), user.DeleteUserHandler(db))
 
 	// ==========================
 	// 9. START SERVER

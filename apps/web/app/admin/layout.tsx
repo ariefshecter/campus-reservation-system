@@ -37,7 +37,6 @@ export default function AdminLayout({
         // Jika lolos, izinkan render
         setIsAuthorized(true)
       } catch (error) {
-        // PERBAIKAN: Gunakan variabel 'error' untuk debugging
         console.error("Gagal verifikasi admin:", error)
         
         // Jika token tidak valid atau expired
@@ -66,12 +65,15 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar Tetap di Kiri */}
+    <div className="min-h-screen bg-slate-50">
+      {/* Sidebar Tetap di Kiri (Fixed Position) */}
       <AdminSidebar />
       
-      {/* Konten Utama di Kanan */}
-      <main className="flex-1 overflow-y-auto p-8">
+      {/* PERBAIKAN DISINI: 
+         1. Hapus 'flex-1' dan 'overflow-y-auto' (karena scroll sekarang di body browser)
+         2. Tambahkan 'ml-64' agar konten bergeser ke kanan sejauh lebar sidebar
+      */}
+      <main className="ml-64 p-8">
         {children}
       </main>
     </div>
