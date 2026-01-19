@@ -3,15 +3,13 @@ package booking
 import (
 	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
 )
 
 // ==========================
 // CREATE BOOKING (USER)
 // ==========================
 func CreateBooking(db *sql.DB, b Booking) error {
-	// 1. Validasi dasar
+	// Validasi dasar (bukan policy)
 	if b.UserID == "" {
 		return errors.New("user tidak valid")
 	}
@@ -24,34 +22,11 @@ func CreateBooking(db *sql.DB, b Booking) error {
 		return errors.New("waktu mulai harus sebelum waktu selesai")
 	}
 
-	// ---------------------------------------------------------
-	// FITUR: Cek Ketersediaan Spesifik
-	// ---------------------------------------------------------
-	conflictEndTime, err := FindOverlappingBooking(db, b.FacilityID, b.StartTime, b.EndTime)
-	if err != nil {
-		return errors.New("gagal mengecek ketersediaan ruangan")
-	}
-
-	if conflictEndTime != nil {
-		// Jika ada tabrakan, ambil waktu selesainya
-		nextAvailable := conflictEndTime.Format("15:04")
-		return fmt.Errorf("ruangan telah terbooking, dapat digunakan lagi setelah pukul %s", nextAvailable)
-	}
-	// ---------------------------------------------------------
-
-	// 2. Insert booking via Repository
-	err = Insert(db, b)
-	if err != nil {
-		msg := err.Error()
-
-		if strings.Contains(msg, "no_double_booking") {
-			return errors.New("jadwal fasilitas bentrok dengan booking lain")
-		}
-
-		if strings.Contains(msg, "no_user_overlap") {
-			return errors.New("anda sudah memiliki booking di waktu tersebut")
-		}
-
+	// INSERT langsung ke DB
+	// Semua rule bentrok & jam operasional DIJAGA DB
+	if err := Insert(db, b); err != nil {
+		// JANGAN ubah error DB
+		// Handler akan mapping berdasarkan constraint
 		return err
 	}
 
@@ -95,13 +70,13 @@ func UpdateBookingStatus(db *sql.DB, bookingID string, newStatus string, adminID
 		return errors.New("status booking tidak bisa diubah karena sudah diproses")
 	}
 
+	// DB akan menangani bentrok saat approve (jika ada)
 	return UpdateStatus(db, bookingID, newStatus, adminID)
 }
 
 // ==========================
 // GET USER BOOKINGS
 // ==========================
-
 func GetUserBookings(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return FindByUserID(db, userID)
 }

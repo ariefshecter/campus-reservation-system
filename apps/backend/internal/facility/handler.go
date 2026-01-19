@@ -38,7 +38,7 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			savePath := filepath.Join("./uploads", filename)
 			if err := c.SaveFile(file, savePath); err == nil {
 				// Set URL
-				photoURL = fmt.Sprintf("http://localhost:3000/uploads/%s", filename)
+				photoURL = fmt.Sprintf("/uploads/%s", filename)
 			}
 		}
 
@@ -104,7 +104,7 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 			filename := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
 			savePath := filepath.Join("./uploads", filename)
 			if err := c.SaveFile(file, savePath); err == nil {
-				photoURL = fmt.Sprintf("http://localhost:3000/uploads/%s", filename)
+				photoURL = fmt.Sprintf("/uploads/%s", filename)
 			}
 		}
 
