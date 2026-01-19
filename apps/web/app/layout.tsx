@@ -12,14 +12,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en">
+    <html lang="id">
       <body className={inter.className}>
         {children}
-        <Toaster />
+
+        {/* GLOBAL TOASTER */}
+        <Toaster
+          richColors
+          position="top-right"
+          closeButton
+        />
       </body>
     </html>
   );

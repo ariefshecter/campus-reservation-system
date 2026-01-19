@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import BookingModal from "../../../components/booking/booking-modal";
+;
 
 /* =======================
    CONFIG
@@ -56,6 +58,11 @@ export default function UserDashboardPage() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [search, setSearch] = useState("");
+
+  // 🔹 STATE UNTUK BOOKING MODAL
+  const [openBooking, setOpenBooking] = useState(false);
+  const [selectedFacility, setSelectedFacility] =
+    useState<Facility | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -140,7 +147,6 @@ export default function UserDashboardPage() {
         {/* ===== STATS ===== */}
         <section className="grid gap-8 md:grid-cols-2">
           <div className="relative overflow-hidden rounded-2xl bg-blue-500/15 px-8 py-7 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-white/50" />
             <p className="text-sm text-slate-300">Pending</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {pendingCount}
@@ -151,7 +157,6 @@ export default function UserDashboardPage() {
           </div>
 
           <div className="relative overflow-hidden rounded-2xl bg-emerald-500/15 px-8 py-7 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-white/50" />
             <p className="text-sm text-slate-300">Disetujui</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {approvedCount}
@@ -174,8 +179,6 @@ export default function UserDashboardPage() {
                 key={f.id}
                 className="group relative overflow-hidden rounded-2xl bg-slate-100 shadow-[0_30px_80px_rgba(5,20,45,0.55)]"
               >
-                <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60" />
-
                 <div className="relative h-44">
                   <Image
                     src={resolveImage(f.photo_url)}
@@ -184,9 +187,7 @@ export default function UserDashboardPage() {
                     unoptimized
                     className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                   />
-
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-
                   <Badge className="absolute right-3 top-3 bg-slate-900/70 text-slate-100">
                     {f.capacity} Org
                   </Badge>
@@ -202,7 +203,13 @@ export default function UserDashboardPage() {
                     </p>
                   </div>
 
-                  <Button className="w-full bg-slate-900 hover:bg-slate-800">
+                  <Button
+                    className="w-full bg-slate-900 hover:bg-slate-800"
+                    onClick={() => {
+                      setSelectedFacility(f);
+                      setOpenBooking(true);
+                    }}
+                  >
                     Booking Sekarang
                   </Button>
                 </CardContent>
@@ -210,6 +217,16 @@ export default function UserDashboardPage() {
             ))}
           </div>
         </section>
+
+        {/* ===== BOOKING MODAL ===== */}
+        {selectedFacility && (
+          <BookingModal
+            open={openBooking}
+            onClose={() => setOpenBooking(false)}
+            facilityId={selectedFacility.id}
+            facilityName={selectedFacility.name}
+          />
+        )}
 
       </div>
     </div>
