@@ -1,8 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image" // Import Next.js Image
 import { toast } from "sonner"
-import { Plus, Trash2, MapPin, Users, Image as ImageIcon, Pencil, UserCircle } from "lucide-react"
+import { 
+  Plus, 
+  Trash2, 
+  MapPin, 
+  Users, 
+  Image as ImageIcon, 
+  Pencil, 
+  UserCircle, 
+  Loader2 
+} from "lucide-react"
 import api from "@/lib/axios"
 
 import { Button } from "@/components/ui/button"
@@ -18,7 +28,20 @@ import {
 } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
 
-// Tipe Data Updated
+// =======================
+// CONFIG & HELPER
+// =======================
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+
+function resolveImage(url: string) {
+  if (!url) return ""
+  if (url.startsWith("http")) return url
+  return `${BACKEND_URL}${url}`
+}
+
+// =======================
+// TYPES
+// =======================
 type Facility = {
   id: string
   name: string
@@ -50,11 +73,12 @@ export default function FacilitiesPage() {
   const [photo, setPhoto] = useState<File | null>(null)
 
   const fetchFacilities = async () => {
+    setLoading(true) // Set loading true saat refresh
     try {
       const res = await api.get("/facilities")
       setFacilities(res.data || []) 
     } catch (error) {
-      console.error(error)
+      console.error(error) // Fix: Log error agar variable terpakai
       toast.error("Gagal memuat data")
     } finally {
       setLoading(false)
@@ -101,6 +125,7 @@ export default function FacilitiesPage() {
       }
       setIsDialogOpen(false); resetForm(); fetchFacilities()
     } catch (error) {
+      console.error(error) // Fix: Log error
       toast.error("Gagal menyimpan data.")
     }
   }
@@ -111,7 +136,10 @@ export default function FacilitiesPage() {
       await api.delete(`/facilities/${id}`)
       toast.success("Dihapus permanen.")
       fetchFacilities()
-    } catch (error) { toast.error("Gagal menghapus.") }
+    } catch (error) { 
+      console.error(error) // Fix: Log error
+      toast.error("Gagal menghapus.") 
+    }
   }
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
@@ -119,7 +147,10 @@ export default function FacilitiesPage() {
       await api.patch(`/facilities/${id}/status`, { is_active: !currentStatus })
       toast.success("Status diubah")
       fetchFacilities()
-    } catch (error) { toast.error("Gagal update status") }
+    } catch (error) { 
+      console.error(error) // Fix: Log error
+      toast.error("Gagal update status") 
+    }
   }
 
   return (
@@ -131,7 +162,7 @@ export default function FacilitiesPage() {
         </div>
         <Button onClick={handleOpenAdd}><Plus className="mr-2 h-4 w-4" /> Tambah Fasilitas</Button>
 
-        {/* Modal Form - Sama seperti sebelumnya */}
+        {/* Modal Form */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>{isEditing ? "Edit Fasilitas" : "Tambah Baru"}</DialogTitle></DialogHeader>
@@ -158,82 +189,109 @@ export default function FacilitiesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Fasilitas</TableHead>
-                {/* Kolom Deskripsi Baru */}
                 <TableHead className="w-[200px]">Deskripsi</TableHead> 
                 <TableHead>Detail</TableHead>
                 <TableHead>Harga</TableHead>
                 <TableHead>Status</TableHead>
-                {/* Kolom Created/Updated Baru */}
                 <TableHead>Terakhir Update</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {facilities.map((item) => (
-                <TableRow key={item.id} className={!item.is_active ? "bg-slate-50 opacity-75" : ""}>
-                  <TableCell className="flex items-center gap-3">
-                    {item.photo_url ? (
-                      <img src={item.photo_url} alt={item.name} className="w-12 h-12 object-cover rounded-md border" />
-                    ) : (
-                      <div className="w-12 h-12 bg-slate-200 rounded-md flex items-center justify-center"><ImageIcon className="w-5 h-5 text-slate-400" /></div>
-                    )}
-                    <span className="font-bold">{item.name}</span>
-                  </TableCell>
-
-                  {/* 1. Kolom Deskripsi (Terpisah) */}
-                  <TableCell>
-                    <div className="text-xs text-slate-600 line-clamp-2" title={item.description}>
-                        {item.description}
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="text-sm space-y-1">
-                        <div className="flex items-center gap-1"><MapPin className="w-3 h-3"/> {item.location}</div>
-                        <div className="flex items-center gap-1"><Users className="w-3 h-3"/> {item.capacity} Org</div>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                     <span className="font-medium text-green-700 text-sm">
-                        {item.price > 0 ? `Rp ${item.price.toLocaleString("id-ID")}` : "Gratis"}
-                     </span>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                        <Switch checked={item.is_active} onCheckedChange={() => handleToggleActive(item.id, item.is_active)} />
-                    </div>
-                  </TableCell>
-
-                  {/* 2. Kolom Created/Updated By (Satu Tempat) */}
-                  <TableCell>
-                     <div className="flex items-center gap-2 text-xs text-slate-600">
-                        <UserCircle className="w-4 h-4 text-slate-400" />
-                        <div>
-                            {item.updated_by_name ? (
-                                <>
-                                    <span className="block font-medium">Updated by:</span>
-                                    {item.updated_by_name}
-                                </>
-                            ) : (
-                                <>
-                                    <span className="block font-medium">Created by:</span>
-                                    {item.created_by_name}
-                                </>
-                            )}
-                        </div>
-                     </div>
-                  </TableCell>
-
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)}><Pencil className="w-4 h-4 text-blue-600" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+              {loading ? (
+                // Fix: Menggunakan variable loading agar tidak warning
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex items-center justify-center text-slate-500">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Memuat data...
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : facilities.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                    Tidak ada data fasilitas.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                facilities.map((item) => (
+                  <TableRow key={item.id} className={!item.is_active ? "bg-slate-50 opacity-75" : ""}>
+                    <TableCell className="flex items-center gap-3">
+                      {/* Fix: Menggunakan Next Image */}
+                      <div className="relative w-12 h-12 overflow-hidden rounded-md border bg-slate-100 flex-shrink-0">
+                        {item.photo_url ? (
+                          <Image 
+                            src={resolveImage(item.photo_url)} 
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                            unoptimized // Penting: Agar tidak error hostname config saat dev
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-5 h-5 text-slate-400" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="font-bold">{item.name}</span>
+                    </TableCell>
+
+                    {/* Kolom Deskripsi */}
+                    <TableCell>
+                      <div className="text-xs text-slate-600 line-clamp-2" title={item.description}>
+                          {item.description}
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      <div className="text-sm space-y-1">
+                          <div className="flex items-center gap-1"><MapPin className="w-3 h-3"/> {item.location}</div>
+                          <div className="flex items-center gap-1"><Users className="w-3 h-3"/> {item.capacity} Org</div>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                        <span className="font-medium text-green-700 text-sm">
+                          {item.price > 0 ? `Rp ${item.price.toLocaleString("id-ID")}` : "Gratis"}
+                        </span>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                          <Switch checked={item.is_active} onCheckedChange={() => handleToggleActive(item.id, item.is_active)} />
+                      </div>
+                    </TableCell>
+
+                    {/* Kolom Created/Updated By */}
+                    <TableCell>
+                        <div className="flex items-center gap-2 text-xs text-slate-600">
+                          <UserCircle className="w-4 h-4 text-slate-400" />
+                          <div>
+                              {item.updated_by_name ? (
+                                  <>
+                                      <span className="block font-medium">Updated by:</span>
+                                      {item.updated_by_name}
+                                  </>
+                              ) : (
+                                  <>
+                                      <span className="block font-medium">Created by:</span>
+                                      {item.created_by_name}
+                                  </>
+                              )}
+                          </div>
+                        </div>
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)}><Pencil className="w-4 h-4 text-blue-600" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 text-red-600" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

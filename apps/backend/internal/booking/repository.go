@@ -112,6 +112,7 @@ func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 // ========================================================
 
 func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
+	// PERBAIKAN: Gunakan CASE WHEN agar booking yang sudah lewat dianggap 'completed'
 	rows, err := db.Query(`
 		SELECT
 			b.id,
@@ -121,7 +122,10 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 			COALESCE(f.name, 'Unknown Facility'),
 			b.start_time,
 			b.end_time,
-			b.status,
+			CASE 
+				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
+				ELSE b.status 
+			END,
 			COALESCE(b.purpose, '-'),
 			b.created_at,
 			COALESCE(admin.name, '') AS admin_name
@@ -168,6 +172,8 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 // ========================================================
 
 func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
+	// PERBAIKAN: Gunakan CASE WHEN agar booking yang sudah lewat dianggap 'completed'
+	// Status filter juga harus mengakomodasi 'completed' jika ingin memfilter data history
 	rows, err := db.Query(`
 		SELECT
 			b.id,
@@ -177,7 +183,10 @@ func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
 			COALESCE(f.name, 'Unknown Facility'),
 			b.start_time,
 			b.end_time,
-			b.status,
+			CASE 
+				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
+				ELSE b.status 
+			END as current_status,
 			COALESCE(b.purpose, '-'),
 			b.created_at,
 			COALESCE(admin.name, '') AS admin_name
@@ -186,7 +195,10 @@ func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
 		JOIN facilities f ON b.facility_id = f.id
 		LEFT JOIN users admin ON b.updated_by = admin.id
 		WHERE b.deleted_at IS NULL
-		  AND ($1 = '' OR b.status::text = $1)
+		  AND ($1 = '' 
+		       OR ($1 = 'completed' AND b.status = 'approved' AND b.end_time < NOW())
+		       OR (b.status::text = $1 AND NOT (b.status = 'approved' AND b.end_time < NOW()))
+		      )
 		ORDER BY b.created_at DESC
 	`, statusFilter)
 

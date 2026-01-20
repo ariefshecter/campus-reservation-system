@@ -43,10 +43,19 @@ func GetStats(db *sql.DB) (DashboardStats, error) {
 	var stats DashboardStats
 
 	// 1. Hitung Angka Utama
+
+	// Total Users
 	db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'user'").Scan(&stats.TotalUsers)
+
+	// Total Facilities
 	db.QueryRow("SELECT COUNT(*) FROM facilities WHERE deleted_at IS NULL").Scan(&stats.TotalFacilities)
+
+	// Pending Bookings
 	db.QueryRow("SELECT COUNT(*) FROM bookings WHERE status = 'pending'").Scan(&stats.PendingBookings)
-	db.QueryRow("SELECT COUNT(*) FROM bookings WHERE status = 'approved'").Scan(&stats.ActiveBookings)
+
+	// Active Bookings
+	// PERBAIKAN: Hanya hitung yg approved DAN waktu selesai belum lewat (end_time > NOW())
+	db.QueryRow("SELECT COUNT(*) FROM bookings WHERE status = 'approved' AND end_time > NOW()").Scan(&stats.ActiveBookings)
 
 	// 2. Ambil 5 Fasilitas Terpopuler
 	rows, err := db.Query(`
@@ -69,8 +78,16 @@ func GetStats(db *sql.DB) (DashboardStats, error) {
 	}
 
 	// 3. Ambil 5 Aktivitas Terbaru
+	// PERBAIKAN: Gunakan CASE WHEN untuk ubah status 'approved' lewat waktu jadi 'completed'
 	recentRows, err := db.Query(`
-		SELECT u.name, f.name, b.status, to_char(b.created_at, 'DD Mon YYYY HH24:MI')
+		SELECT 
+			u.name, 
+			f.name, 
+			CASE 
+				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
+				ELSE b.status 
+			END as status,
+			to_char(b.created_at, 'DD Mon YYYY HH24:MI')
 		FROM bookings b
 		JOIN users u ON b.user_id = u.id
 		JOIN facilities f ON b.facility_id = f.id
