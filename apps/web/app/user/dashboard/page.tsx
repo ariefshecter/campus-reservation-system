@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import BookingModal from "../../../components/booking/booking-modal";
-;
+import BookingModal from "@/components/booking/booking-modal";
 
 /* =======================
    CONFIG
@@ -59,27 +58,42 @@ export default function UserDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [search, setSearch] = useState("");
 
-  // 🔹 STATE UNTUK BOOKING MODAL
+  // booking modal
   const [openBooking, setOpenBooking] = useState(false);
   const [selectedFacility, setSelectedFacility] =
     useState<Facility | null>(null);
 
+  /* =======================
+     INITIAL LOAD
+     (eslint-safe)
+  ======================= */
   useEffect(() => {
-    const fetchData = async () => {
-      const [profileRes, facilityRes, bookingRes] = await Promise.all([
-        api.get<Profile>("/profile"),
-        api.get<Facility[]>("/facilities"),
-        api.get<Booking[]>("/bookings/me"),
-      ]);
+    (async () => {
+      const [profileRes, facilityRes, bookingRes] =
+        await Promise.all([
+          api.get<Profile>("/profile"),
+          api.get<Facility[]>("/facilities"),
+          api.get<Booking[]>("/bookings/me"),
+        ]);
 
       setProfile(profileRes.data);
       setFacilities(facilityRes.data ?? []);
       setBookings(bookingRes.data ?? []);
-    };
-
-    fetchData();
+    })();
   }, []);
 
+  /* =======================
+     REFRESH BOOKINGS ONLY
+     (dipanggil setelah booking sukses)
+  ======================= */
+  const refreshBookings = async () => {
+    const res = await api.get<Booking[]>("/bookings/me");
+    setBookings(res.data ?? []);
+  };
+
+  /* =======================
+     DERIVED STATE
+  ======================= */
   const isProfileIncomplete =
     !profile?.phone_number || !profile?.identity_number;
 
@@ -100,6 +114,9 @@ export default function UserDashboardPage() {
     (b) => b.status === "approved"
   ).length;
 
+  /* =======================
+     RENDER
+  ======================= */
   return (
     <div className="min-h-screen bg-[radial-gradient(900px_circle_at_20%_10%,#1e3f78,transparent_45%),radial-gradient(700px_circle_at_80%_20%,#102b52,transparent_50%),linear-gradient(180deg,#071a33,#041225)] px-6 py-12">
       <div className="mx-auto max-w-7xl space-y-14">
@@ -107,14 +124,13 @@ export default function UserDashboardPage() {
         {/* ===== ALERT ===== */}
         {isProfileIncomplete && (
           <div className="relative overflow-hidden rounded-xl bg-slate-100/95 px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
-            <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60" />
             <div className="flex items-center justify-between text-sm text-slate-800">
               <span>
                 Profil Anda belum lengkap. Lengkapi data untuk mempercepat
                 persetujuan peminjaman.
               </span>
               <Link href="/user/profile">
-                <Button size="sm" className="bg-slate-900 hover:bg-slate-800">
+                <Button size="sm">
                   Lengkapi Profil
                 </Button>
               </Link>
@@ -123,8 +139,7 @@ export default function UserDashboardPage() {
         )}
 
         {/* ===== HERO ===== */}
-        <section className="relative overflow-hidden rounded-2xl bg-slate-100/10 px-12 py-14 shadow-[0_30px_80px_rgba(5,20,45,0.65)] backdrop-blur-lg">
-          <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent" />
+        <section className="relative overflow-hidden rounded-2xl bg-slate-100/10 px-12 py-14 backdrop-blur-lg">
           <div className="relative text-center">
             <h1 className="text-2xl font-semibold text-slate-100">
               Halo{profile?.full_name ? `, ${profile.full_name}` : ""}
@@ -138,7 +153,6 @@ export default function UserDashboardPage() {
                 placeholder="Cari Aula, Lab Komputer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-12 rounded-xl bg-slate-100 text-slate-900 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] focus:bg-white"
               />
             </div>
           </div>
@@ -146,7 +160,7 @@ export default function UserDashboardPage() {
 
         {/* ===== STATS ===== */}
         <section className="grid gap-8 md:grid-cols-2">
-          <div className="relative overflow-hidden rounded-2xl bg-blue-500/15 px-8 py-7 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
+          <div className="rounded-2xl bg-blue-500/15 px-8 py-7">
             <p className="text-sm text-slate-300">Pending</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {pendingCount}
@@ -156,7 +170,7 @@ export default function UserDashboardPage() {
             </p>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl bg-emerald-500/15 px-8 py-7 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
+          <div className="rounded-2xl bg-emerald-500/15 px-8 py-7">
             <p className="text-sm text-slate-300">Disetujui</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {approvedCount}
@@ -177,7 +191,7 @@ export default function UserDashboardPage() {
             {filteredFacilities.map((f) => (
               <Card
                 key={f.id}
-                className="group relative overflow-hidden rounded-2xl bg-slate-100 shadow-[0_30px_80px_rgba(5,20,45,0.55)]"
+                className="relative overflow-hidden rounded-2xl bg-slate-100 shadow"
               >
                 <div className="relative h-44">
                   <Image
@@ -185,7 +199,7 @@ export default function UserDashboardPage() {
                     alt={f.name}
                     fill
                     unoptimized
-                    className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    className="object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <Badge className="absolute right-3 top-3 bg-slate-900/70 text-slate-100">
@@ -223,6 +237,7 @@ export default function UserDashboardPage() {
           <BookingModal
             open={openBooking}
             onClose={() => setOpenBooking(false)}
+            onSuccess={refreshBookings}
             facilityId={selectedFacility.id}
             facilityName={selectedFacility.name}
           />

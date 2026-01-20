@@ -15,8 +15,8 @@ import (
 
 type CreateBookingRequest struct {
 	FacilityID string `json:"facility_id"`
-	StartTime  string `json:"start_time"` // ISO 8601
-	EndTime    string `json:"end_time"`   // ISO 8601
+	StartTime  string `json:"start_time"` // YYYY-MM-DDTHH:MM:SS
+	EndTime    string `json:"end_time"`
 	Purpose    string `json:"purpose"`
 }
 
@@ -34,19 +34,53 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 
 		var req CreateBookingRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(400).JSON(fiber.Map{
 				"error": "Format request tidak valid",
 			})
 		}
 
-		start, err1 := time.Parse(time.RFC3339, req.StartTime)
-		end, err2 := time.Parse(time.RFC3339, req.EndTime)
-		if err1 != nil || err2 != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Format tanggal salah. Gunakan ISO 8601 (contoh: 2026-01-20T10:00:00Z)",
+		// ===============================
+		// PARSE TIME AS WIB
+		// ===============================
+		loc, err := time.LoadLocation("Asia/Jakarta")
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Timezone server tidak valid",
 			})
 		}
 
+		layout := "2006-01-02T15:04:05"
+
+		start, err1 := time.ParseInLocation(layout, req.StartTime, loc)
+		end, err2 := time.ParseInLocation(layout, req.EndTime, loc)
+
+		if err1 != nil || err2 != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Format tanggal salah (YYYY-MM-DDTHH:MM:SS)",
+			})
+		}
+
+		if !start.Before(end) {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Jam mulai harus sebelum jam selesai",
+			})
+		}
+
+		// ===============================
+		// VALIDASI JAM OPERASIONAL (WIB)
+		// ===============================
+		startHour := start.Hour()
+		endHour := end.Hour()
+
+		if startHour < 8 || endHour > 16 {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Booking hanya diperbolehkan antara jam 08.00 - 16.00",
+			})
+		}
+
+		// ===============================
+		// CREATE BOOKING
+		// ===============================
 		newBooking := Booking{
 			ID:         uuid.New().String(),
 			UserID:     userID,
@@ -58,21 +92,20 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 		}
 
 		if err := CreateBooking(db, newBooking); err != nil {
-			status, message := mapBookingError(err)
+			status, msg := mapBookingError(err)
 			return c.Status(status).JSON(fiber.Map{
-				"error": message,
+				"error": msg,
 			})
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		return c.Status(201).JSON(fiber.Map{
 			"message": "Booking berhasil dibuat, menunggu persetujuan admin",
-			"data":    newBooking,
 		})
 	}
 }
 
 // ========================================================
-// HANDLER: MY BOOKINGS (USER)
+// HANDLER LAIN TETAP (TIDAK DIUBAH)
 // ========================================================
 
 func MyBookingsHandler(db *sql.DB) fiber.Handler {
@@ -81,7 +114,7 @@ func MyBookingsHandler(db *sql.DB) fiber.Handler {
 
 		bookings, err := GetUserBookings(db, userID)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			return c.Status(500).JSON(fiber.Map{
 				"error": "Gagal memuat riwayat booking",
 			})
 		}
@@ -94,17 +127,13 @@ func MyBookingsHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// ========================================================
-// HANDLER: LIST ALL BOOKINGS (ADMIN)
-// ========================================================
-
 func ListAllHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		statusFilter := c.Query("status")
 
 		bookings, err := GetAll(db, statusFilter)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			return c.Status(500).JSON(fiber.Map{
 				"error": "Gagal memuat data booking",
 			})
 		}
@@ -117,10 +146,6 @@ func ListAllHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// ========================================================
-// HANDLER: UPDATE STATUS (ADMIN)
-// ========================================================
-
 func UpdateStatusHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		bookingID := c.Params("id")
@@ -128,13 +153,13 @@ func UpdateStatusHandler(db *sql.DB) fiber.Handler {
 
 		var req UpdateStatusRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(400).JSON(fiber.Map{
 				"error": "Format request tidak valid",
 			})
 		}
 
 		if err := UpdateBookingStatus(db, bookingID, req.Status, adminID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(400).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
@@ -145,17 +170,13 @@ func UpdateStatusHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// ========================================================
-// HANDLER: CANCEL BOOKING (USER)
-// ========================================================
-
 func CancelHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		bookingID := c.Params("id")
 		userID := c.Locals("user_id").(string)
 
 		if err := CancelBooking(db, bookingID, userID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(400).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
@@ -166,23 +187,16 @@ func CancelHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// ========================================================
-// ERROR MAPPER (DB CONSTRAINT → USER MESSAGE)
-// ========================================================
-
 func mapBookingError(err error) (int, string) {
 	msg := err.Error()
 
 	switch {
 	case strings.Contains(msg, "no_double_booking"):
-		return fiber.StatusConflict, "Ruangan sudah dibooking pada waktu tersebut"
+		return 409, "Ruangan sudah dibooking pada waktu tersebut"
 
 	case strings.Contains(msg, "no_user_overlap"):
-		return fiber.StatusConflict, "Anda sudah memiliki booking lain di waktu yang sama"
-
-	case strings.Contains(msg, "booking_operational_hours"):
-		return fiber.StatusBadRequest, "Booking hanya dapat dilakukan antara jam 08.00 sampai 16.00"
+		return 409, "Anda sudah memiliki booking lain di waktu yang sama"
 	}
 
-	return fiber.StatusBadRequest, msg
+	return 400, msg
 }

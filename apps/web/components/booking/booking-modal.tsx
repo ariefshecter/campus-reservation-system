@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import api from "@/lib/axios";
 import axios from "axios";
 import {
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 type BookingModalProps = {
   open: boolean;
   onClose: () => void;
+  onSuccess: () => void; // 🔑 callback refresh
   facilityId: string;
   facilityName: string;
 };
@@ -24,6 +25,7 @@ type BookingModalProps = {
 export default function BookingModal({
   open,
   onClose,
+  onSuccess,
   facilityId,
   facilityName,
 }: BookingModalProps) {
@@ -32,48 +34,44 @@ export default function BookingModal({
   const [endTime, setEndTime] = useState("");
   const [purpose, setPurpose] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const isTimeInRange = (time: string) =>
+    time >= "08:00" && time <= "16:00";
+
+  const isFormValid = useMemo(() => {
+    if (!date || !startTime || !endTime) return false;
+    if (startTime >= endTime) return false;
+    if (!isTimeInRange(startTime)) return false;
+    if (!isTimeInRange(endTime)) return false;
+    return true;
+  }, [date, startTime, endTime]);
 
   const submitBooking = async () => {
-    setError(null);
-
-    if (!date || !startTime || !endTime) {
-      setError("Tanggal dan jam wajib diisi");
-      return;
-    }
-
-    if (startTime >= endTime) {
-      setError("Jam mulai harus lebih awal dari jam selesai");
-      return;
-    }
-
-    const start = `${date}T${startTime}:00`;
-    const end = `${date}T${endTime}:00`;
-
+    if (!isFormValid) return;
 
     try {
       setLoading(true);
 
       await api.post("/bookings", {
         facility_id: facilityId,
-        start_time: start,
-        end_time: end,
+        start_time: `${date}T${startTime}:00`,
+        end_time: `${date}T${endTime}:00`,
         purpose,
       });
 
-      // ✅ TOAST SUKSES
       toast.success("Booking berhasil diajukan", {
         description: "Menunggu persetujuan admin",
       });
 
-      // Reset form (opsional tapi profesional)
+      // reset
       setDate("");
       setStartTime("");
       setEndTime("");
       setPurpose("");
 
       onClose();
-    } catch (err: unknown) {
+      onSuccess(); // 🔄 trigger refresh parent
+    } catch (err) {
       if (axios.isAxiosError(err)) {
         toast.error("Gagal membuat booking", {
           description:
@@ -95,7 +93,9 @@ export default function BookingModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="text-sm font-medium">{facilityName}</div>
+          <div className="text-sm font-medium">
+            {facilityName}
+          </div>
 
           <Input
             type="date"
@@ -126,15 +126,21 @@ export default function BookingModal({
             onChange={(e) => setPurpose(e.target.value)}
           />
 
-          {error && (
-            <p className="text-sm text-red-600">{error}</p>
+          {!isFormValid && (
+            <p className="text-sm text-muted-foreground">
+              Jam booking harus 08.00–16.00 dan jam selesai
+              lebih besar dari jam mulai
+            </p>
           )}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
               Batal
             </Button>
-            <Button onClick={submitBooking} disabled={loading}>
+            <Button
+              onClick={submitBooking}
+              disabled={!isFormValid || loading}
+            >
               {loading ? "Menyimpan..." : "Ajukan Booking"}
             </Button>
           </div>
