@@ -187,9 +187,19 @@ func CancelHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
+// ========================================================
+// ERROR MAPPING
+// ========================================================
+
 func mapBookingError(err error) (int, string) {
 	msg := err.Error()
 
+	// 1. Cek error detail dari Service (Ruangan bentrok)
+	if strings.Contains(msg, "Ruangan sudah dibooking pada") {
+		return 409, msg // 409 Conflict: Mengirim pesan asli yg ada jamnya
+	}
+
+	// 2. Cek error constraints dari Database (Fallback)
 	switch {
 	case strings.Contains(msg, "no_double_booking"):
 		return 409, "Ruangan sudah dibooking pada waktu tersebut"
@@ -198,5 +208,6 @@ func mapBookingError(err error) (int, string) {
 		return 409, "Anda sudah memiliki booking lain di waktu yang sama"
 	}
 
+	// Default Bad Request
 	return 400, msg
 }

@@ -3,6 +3,8 @@ package booking
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 )
 
 // ==========================
@@ -22,11 +24,33 @@ func CreateBooking(db *sql.DB, b Booking) error {
 		return errors.New("waktu mulai harus sebelum waktu selesai")
 	}
 
-	// INSERT langsung ke DB
-	// Semua rule bentrok & jam operasional DIJAGA DB
+	// 1. CEK DULU APAKAH ADA BENTROK?
+	// Memanggil fungsi dari repository untuk mencari booking approved yang beririsan
+	conflictStart, conflictEnd, err := GetConflictingBooking(db, b.FacilityID, b.StartTime, b.EndTime)
+	if err != nil {
+		return errors.New("gagal mengecek ketersediaan ruangan")
+	}
+
+	// Jika conflictStart tidak nil, berarti ada bentrok
+	if conflictStart != nil {
+		// Format waktu ke WIB (Asia/Jakarta) untuk pesan error
+		loc, err := time.LoadLocation("Asia/Jakarta")
+		if err != nil {
+			// Fallback ke Local jika timezone tidak ditemukan
+			loc = time.Local
+		}
+
+		// Format tampilan: "22 Jan 2026, 10:00"
+		tStart := conflictStart.In(loc).Format("02 Jan 2006, 15:04")
+		tEnd := conflictEnd.In(loc).Format("15:04")
+
+		// Return error spesifik yang akan ditangkap di handler
+		return fmt.Errorf("Ruangan sudah dibooking pada: %s - %s WIB. Silakan pilih jam lain.", tStart, tEnd)
+	}
+
+	// 2. JIKA AMAN, BARU INSERT
+	// Semua rule bentrok & jam operasional tetap dijaga DB sebagai pertahanan lapis kedua
 	if err := Insert(db, b); err != nil {
-		// JANGAN ubah error DB
-		// Handler akan mapping berdasarkan constraint
 		return err
 	}
 

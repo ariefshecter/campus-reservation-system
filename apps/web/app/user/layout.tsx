@@ -83,8 +83,10 @@ export default function UserLayout({ children }: { children: ReactNode }) {
               {/* RIGHT */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
+                  {/* FIX: Tambahkan suppressHydrationWarning di sini */}
                   <Button
                     variant="ghost"
+                    suppressHydrationWarning={true}
                     className="flex items-center gap-3 rounded-full px-3 py-2 hover:bg-white/10"
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-sm font-semibold text-white shadow-inner">

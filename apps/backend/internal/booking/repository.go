@@ -112,7 +112,7 @@ func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 // ========================================================
 
 func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
-	// PERBAIKAN: Gunakan CASE WHEN agar booking yang sudah lewat dianggap 'completed'
+	// PERBAIKAN: Tambahkan ::text pada ELSE b.status
 	rows, err := db.Query(`
 		SELECT
 			b.id,
@@ -124,7 +124,7 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 			b.end_time,
 			CASE 
 				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
-				ELSE b.status 
+				ELSE b.status::text 
 			END,
 			COALESCE(b.purpose, '-'),
 			b.created_at,
@@ -172,8 +172,7 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 // ========================================================
 
 func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
-	// PERBAIKAN: Gunakan CASE WHEN agar booking yang sudah lewat dianggap 'completed'
-	// Status filter juga harus mengakomodasi 'completed' jika ingin memfilter data history
+	// PERBAIKAN: Tambahkan ::text pada ELSE b.status
 	rows, err := db.Query(`
 		SELECT
 			b.id,
@@ -185,7 +184,7 @@ func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
 			b.end_time,
 			CASE 
 				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
-				ELSE b.status 
+				ELSE b.status::text 
 			END as current_status,
 			COALESCE(b.purpose, '-'),
 			b.created_at,
@@ -229,4 +228,33 @@ func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
 	}
 
 	return bookings, nil
+}
+
+// ========================================================
+// CEK BENTROK (UNTUK DETAIL ERROR)
+// ========================================================
+
+func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) (*time.Time, *time.Time, error) {
+	var conflictStart, conflictEnd time.Time
+
+	// Query cari booking yg statusnya approved dan waktunya beririsan
+	// Logika Overlap: (RequestStart < ExistingEnd) AND (RequestEnd > ExistingStart)
+	err := db.QueryRow(`
+		SELECT start_time, end_time
+		FROM bookings
+		WHERE facility_id = $1
+		  AND status = 'approved' 
+		  AND deleted_at IS NULL
+		  AND ($2 < end_time AND $3 > start_time)
+		LIMIT 1
+	`, facilityID, start, end).Scan(&conflictStart, &conflictEnd)
+
+	if err == sql.ErrNoRows {
+		return nil, nil, nil // Tidak ada bentrok
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &conflictStart, &conflictEnd, nil
 }
