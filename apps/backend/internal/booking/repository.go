@@ -243,7 +243,7 @@ func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) 
 		SELECT start_time, end_time
 		FROM bookings
 		WHERE facility_id = $1
-		  AND status = 'approved' 
+		  AND (status = 'approved' OR status = 'pending') 
 		  AND deleted_at IS NULL
 		  AND ($2 < end_time AND $3 > start_time)
 		LIMIT 1

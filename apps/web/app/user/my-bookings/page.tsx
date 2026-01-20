@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/axios";
-import { AxiosError } from "axios"; // Import AxiosError untuk handling error type
+import { AxiosError } from "axios";
 import { toast } from "sonner";
-import { Loader2, Trash2, CalendarDays, Clock, MapPin } from "lucide-react";
+import { 
+  Loader2, 
+  Trash2, 
+  CalendarDays, 
+  Clock, 
+  MapPin, 
+  Search, 
+  UserCheck
+} from "lucide-react";
 
 import {
   Table,
@@ -16,23 +24,28 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 /* =======================
    TYPES
 ======================= */
+type BookingStatus = "pending" | "approved" | "rejected" | "canceled" | "completed";
+
 type Booking = {
   id: string;
   facility_name: string;
   start_time: string;
   end_time: string;
-  status: "pending" | "approved" | "rejected" | "canceled" | "completed";
+  status: BookingStatus;
   purpose: string;
   created_at: string;
+  admin_name?: string; // Field baru untuk nama admin
 };
 
 /* =======================
-   HELPER: FORMAT DATE
+   HELPER
 ======================= */
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -60,6 +73,10 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
 
+  // Filter States
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+
   // 1. Fetch Data
   const fetchBookings = async () => {
     setLoading(true);
@@ -86,31 +103,63 @@ export default function MyBookingsPage() {
     try {
       await api.delete(`/bookings/${id}`);
       toast.success("Booking berhasil dibatalkan");
-      // Refresh manual agar status berubah
       fetchBookings(); 
     } catch (error) {
-      // FIX: Menggunakan AxiosError untuk type safety menggantikan 'any'
       const err = error as AxiosError<{ error: string }>;
       const msg = err.response?.data?.error || "Gagal membatalkan booking";
       toast.error(msg);
-      setCancelingId(null); // Reset jika gagal
+    } finally {
+      setCancelingId(null);
     }
   };
 
-  // 3. Helper Status Badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  // 3. Filter Logic (Search & Tabs)
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((b) => {
+      const matchSearch = 
+        b.facility_name.toLowerCase().includes(search.toLowerCase()) || 
+        b.purpose.toLowerCase().includes(search.toLowerCase());
+      
+      const matchStatus = statusFilter === "all" ? true : b.status === statusFilter;
+      
+      return matchSearch && matchStatus;
+    });
+  }, [bookings, search, statusFilter]);
+
+  // 4. Helper Status Badge dengan Info Admin
+  const renderStatus = (item: Booking) => {
+    let badge;
+    switch (item.status) {
       case "approved":
-        return <Badge className="bg-emerald-500 hover:bg-emerald-600">Disetujui</Badge>;
+        badge = <Badge className="bg-emerald-500 hover:bg-emerald-600">Disetujui</Badge>;
+        break;
       case "rejected":
-        return <Badge variant="destructive">Ditolak</Badge>;
+        badge = <Badge variant="destructive">Ditolak</Badge>;
+        break;
       case "canceled":
-        return <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">Dibatalkan</Badge>;
+        badge = <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">Dibatalkan</Badge>;
+        break;
       case "completed":
-        return <Badge className="bg-slate-500 hover:bg-slate-600">Selesai</Badge>;
+        badge = <Badge className="bg-slate-500 hover:bg-slate-600">Selesai</Badge>;
+        break;
       default: // pending
-        return <Badge className="bg-blue-500 hover:bg-blue-600">Menunggu</Badge>;
+        badge = <Badge className="bg-blue-500 hover:bg-blue-600">Menunggu</Badge>;
     }
+
+    // Jika status Approved/Rejected dan ada nama admin, tampilkan infonya
+    if ((item.status === "approved" || item.status === "rejected") && item.admin_name) {
+      return (
+        <div className="flex flex-col items-start gap-1">
+          {badge}
+          <div className="flex items-center text-[11px] text-slate-400 mt-0.5">
+            <UserCheck className="mr-1 h-3 w-3" />
+            <span>Oleh: {item.admin_name}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return badge;
   };
 
   return (
@@ -125,12 +174,46 @@ export default function MyBookingsPage() {
           </p>
         </div>
 
+        {/* FILTERS TOOLBAR */}
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+            <Input
+              placeholder="Cari fasilitas atau keperluan..."
+              className="pl-9 bg-slate-900/50 border-slate-700 text-slate-200 placeholder:text-slate-500 focus-visible:ring-slate-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Status Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+             {(["all", "pending", "approved", "completed", "rejected", "canceled"] as const).map((status) => (
+                <Button
+                  key={status}
+                  variant={statusFilter === status ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter(status)}
+                  className={cn(
+                    "capitalize border-slate-700",
+                    statusFilter === status 
+                      ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-600" 
+                      : "bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  {status === "all" ? "Semua" : status}
+                </Button>
+             ))}
+          </div>
+        </div>
+
         {/* CONTENT */}
         <Card className="border-slate-800 bg-slate-900/50 text-slate-200 shadow-xl backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Daftar Peminjaman</CardTitle>
             <CardDescription className="text-slate-400">
-              Menampilkan semua riwayat booking aktif dan lampau.
+              Menampilkan {filteredBookings.length} data booking.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -139,10 +222,10 @@ export default function MyBookingsPage() {
                 <Loader2 className="mr-2 h-6 w-6 animate-spin" />
                 Memuat data...
               </div>
-            ) : bookings.length === 0 ? (
+            ) : filteredBookings.length === 0 ? (
               <div className="flex h-60 flex-col items-center justify-center space-y-4 text-slate-400 border border-dashed border-slate-700 rounded-xl bg-slate-800/20">
                 <CalendarDays className="h-10 w-10 opacity-50" />
-                <p>Belum ada riwayat booking.</p>
+                <p>Tidak ada data booking yang sesuai.</p>
               </div>
             ) : (
               <Table>
@@ -156,7 +239,7 @@ export default function MyBookingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {bookings.map((item) => (
+                  {filteredBookings.map((item) => (
                     <TableRow key={item.id} className="border-slate-800 hover:bg-slate-800/50 transition-colors">
                       
                       {/* FASILITAS */}
@@ -189,8 +272,8 @@ export default function MyBookingsPage() {
                         {item.purpose}
                       </TableCell>
 
-                      {/* STATUS */}
-                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      {/* STATUS (Dengan Admin Name) */}
+                      <TableCell>{renderStatus(item)}</TableCell>
 
                       {/* AKSI */}
                       <TableCell className="text-right">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { toast } from "sonner"
-import { Check, X, Clock, Calendar, User, Building } from "lucide-react"
+import { Check, X, Clock, Calendar, User, Building, UserCheck } from "lucide-react"
 import { AxiosError } from "axios"
 import api from "@/lib/axios"
 
@@ -49,7 +49,7 @@ export default function AdminBookingsPage() {
   const [filter, setFilter] = useState("pending")
 
   /* =======================
-     FETCH BOOKINGS
+      FETCH BOOKINGS
   ======================= */
   const fetchBookings = useCallback(async () => {
     setLoading(true)
@@ -70,14 +70,15 @@ export default function AdminBookingsPage() {
   }, [fetchBookings])
 
   /* =======================
-     APPROVE / REJECT
-     🔥 EVENT DISPATCH DI SINI
+      APPROVE / REJECT
+      🔥 EVENT DISPATCH DI SINI
   ======================= */
   const handleUpdateStatus = async (
     id: string,
     newStatus: "approved" | "rejected"
   ) => {
     try {
+      // PERBAIKAN: Tetap menggunakan PATCH sesuai permintaan
       await api.patch(`/bookings/${id}/status`, {
         status: newStatus,
       })
@@ -92,9 +93,9 @@ export default function AdminBookingsPage() {
       fetchBookings()
 
       // 🔥 PENTING: trigger refresh dashboard admin
-      window.dispatchEvent(
-        new Event("admin-booking-updated")
-      )
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("admin-booking-updated"))
+      }
 
     } catch (err) {
       const error = err as AxiosError<ErrorResponse>
@@ -116,7 +117,7 @@ export default function AdminBookingsPage() {
   }
 
   /* =======================
-     RENDER
+      RENDER
   ======================= */
   return (
     <div className="space-y-6">
@@ -227,27 +228,43 @@ export default function AdminBookingsPage() {
                       </div>
                     </TableCell>
 
+                    {/* STATUS COLUMN DENGAN ADMIN NAME */}
                     <TableCell>
-                      {item.status === "approved" && (
-                        <Badge className="bg-green-100 text-green-700">
-                          Disetujui
-                        </Badge>
-                      )}
-                      {item.status === "pending" && (
-                        <Badge className="bg-orange-100 text-orange-700">
-                          Pending
-                        </Badge>
-                      )}
-                      {item.status === "rejected" && (
-                        <Badge className="bg-red-100 text-red-700">
-                          Ditolak
-                        </Badge>
-                      )}
-                      {item.status === "canceled" && (
-                        <Badge className="bg-slate-100 text-slate-700">
-                          Batal
-                        </Badge>
-                      )}
+                      <div className="flex flex-col items-start gap-1">
+                          {item.status === "approved" && (
+                            <Badge className="bg-green-100 text-green-700">
+                              Disetujui
+                            </Badge>
+                          )}
+                          {item.status === "pending" && (
+                            <Badge className="bg-orange-100 text-orange-700">
+                              Pending
+                            </Badge>
+                          )}
+                          {item.status === "rejected" && (
+                            <Badge className="bg-red-100 text-red-700">
+                              Ditolak
+                            </Badge>
+                          )}
+                          {item.status === "canceled" && (
+                            <Badge className="bg-slate-100 text-slate-700">
+                              Batal
+                            </Badge>
+                          )}
+                          {item.status === "completed" && (
+                            <Badge className="bg-slate-200 text-slate-700">
+                              Selesai
+                            </Badge>
+                          )}
+
+                          {/* Fitur Baru: Tampilkan nama admin yang memproses */}
+                          {(item.status === "approved" || item.status === "rejected") && item.admin_name && (
+                            <div className="flex items-center text-[10px] text-slate-500 mt-1 font-medium">
+                               <UserCheck className="mr-1 h-3 w-3" />
+                               Oleh: {item.admin_name}
+                            </div>
+                          )}
+                      </div>
                     </TableCell>
 
                     <TableCell className="text-right">
@@ -256,7 +273,7 @@ export default function AdminBookingsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 p-0 rounded-full border-green-500 text-green-600"
+                            className="h-8 w-8 p-0 rounded-full border-green-500 text-green-600 hover:bg-green-50"
                             onClick={() =>
                               handleUpdateStatus(
                                 item.id,
@@ -269,7 +286,7 @@ export default function AdminBookingsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 p-0 rounded-full border-red-500 text-red-600"
+                            className="h-8 w-8 p-0 rounded-full border-red-500 text-red-600 hover:bg-red-50"
                             onClick={() =>
                               handleUpdateStatus(
                                 item.id,
