@@ -2,6 +2,9 @@ package profile
 
 import (
 	"database/sql"
+	"fmt"
+	"path/filepath"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -82,4 +85,38 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 			"message": "profil berhasil disimpan",
 		})
 	}
+}
+
+// ==========================
+// UPLOAD AVATAR HANDLER (BARU)
+// ==========================
+func UploadAvatarHandler(c *fiber.Ctx) error {
+	// 1. Ambil file dari form-data
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Gagal mengupload gambar"})
+	}
+
+	// 2. Validasi Ukuran (Max 2MB)
+	if file.Size > 2*1024*1024 {
+		return c.Status(400).JSON(fiber.Map{"error": "Ukuran file maksimal 2MB"})
+	}
+
+	// 3. Buat nama file unik
+	timestamp := time.Now().Unix()
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("%d-%s%s", timestamp, "avatar", ext)
+
+	// 4. Simpan ke folder uploads
+	// Pastikan folder 'uploads' sudah ada di root project backend
+	if err := c.SaveFile(file, fmt.Sprintf("./uploads/%s", filename)); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Gagal menyimpan file ke server"})
+	}
+
+	// 5. Return URL gambar
+	// URL ini akan dikirim frontend ke endpoint UpdateProfile
+	avatarURL := fmt.Sprintf("/uploads/%s", filename)
+	return c.JSON(fiber.Map{
+		"url": avatarURL,
+	})
 }

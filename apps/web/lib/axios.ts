@@ -4,7 +4,9 @@ import axios from "axios";
 // AXIOS INSTANCE (BACKEND ONLY)
 // ==========================
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000",
+  // HARDCODE URL (Hapus process.env sementara untuk memastikan alamat benar)
+  baseURL: "http://localhost:3000", 
+  
   headers: {
     "Content-Type": "application/json",
   },
