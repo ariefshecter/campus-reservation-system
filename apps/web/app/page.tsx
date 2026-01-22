@@ -18,27 +18,26 @@ export default function Home() {
         <div className="container mx-auto flex h-20 items-center justify-between px-6 lg:px-12">
           
           {/* LOGO & NAME SECTION */}
-          {/* UPDATE: Hapus gap-1 agar tidak ada jarak default */}
-          <div className="flex items-center">
+          {/* Gunakan gap-3 normal karena container logo sekarang sudah pas (tidak lebar) */}
+          <div className="flex items-center gap-3">
             
-            {/* Container Gambar Logo */}
-            <div className="relative flex h-14 w-auto">
+            {/* PERBAIKAN: 
+                1. Kita kunci ukurannya jadi kotak 'h-12 w-12' (48x48px).
+                2. Hapus width/height manual di Image, ganti pakai 'fill'.
+                Ini akan membuang semua ruang kosong berlebih di kanan kiri.
+            */}
+            <div className="relative h-12 w-12 shrink-0">
               <Image 
                 src="/logo.png" 
                 alt="UniSpace Logo" 
-                width={150} 
-                height={60} 
-                className="object-contain object-left"
+                fill
+                className="object-contain" // Agar gambar pas di dalam kotak 12x12
                 priority
               />
             </div>
 
             {/* TEKS NAMA SISTEM */}
-            {/* UPDATE: Tambahkan '-ml-4' (margin-left negatif) 
-               untuk menarik teks ke kiri secara paksa mendekati logo 
-               (sesuaikan angkanya -3, -4, atau -5 jika perlu lebih dekat lagi)
-            */}
-            <span className="hidden md:block text-xl font-bold tracking-tight text-slate-100 mt-1 -ml-4">
+            <span className="hidden md:block text-xl font-bold tracking-tight text-slate-100">
               Uni<span className="text-blue-500">Space</span>
             </span>
           </div>
@@ -138,7 +137,7 @@ export default function Home() {
 
       <footer className="border-t border-white/5 bg-black/20 py-8">
         <div className="container mx-auto px-6 text-center text-slate-500 text-sm">
-          <p>&copy; {new Date().getFullYear()} UniSpacea - Campus Reservation System.</p>
+          <p>&copy; {new Date().getFullYear()} UniSpace - Campus Reservation System.</p>
         </div>
       </footer>
     </div>

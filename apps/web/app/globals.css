@@ -26,22 +26,22 @@
   --radius-lg: var(--radius);
 }
 
-/* TEMA DARK NAVY (MATCHING DASHBOARD)
-   Kita set default root ke warna gelap agar konsisten 
+/* TEMA UNISPACE (DARK NAVY)
+  Menggunakan Color Space OKLCH untuk akurasi warna di Tailwind v4 
 */
 :root {
-  /* Background Dasar (Fallback jika gradient gagal load) */
-  --background: oklch(0.141 0.005 285.823); /* Dark Navy */
-  --foreground: oklch(0.985 0 0);           /* White Text */
+  /* Background Dasar (Deep Navy) */
+  --background: oklch(0.141 0.005 285.823); 
+  --foreground: oklch(0.985 0 0); /* White Text */
 
-  /* Kartu (Glassmorphism effect uses bg-white/10 usually, but here is base) */
+  /* Kartu (Glassy Dark) */
   --card: oklch(0.17 0.01 285.8);
   --card-foreground: oklch(0.985 0 0);
 
   --popover: oklch(0.141 0.005 285.823);
   --popover-foreground: oklch(0.985 0 0);
 
-  /* Primary Button: Bright Blue (Like Dashboard stats) */
+  /* Primary Button: Bright Electric Blue */
   --primary: oklch(0.6 0.15 250); 
   --primary-foreground: oklch(1 0 0);
 
@@ -57,6 +57,7 @@
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.985 0 0);
 
+  /* Border & Input Colors (Darker Blue-Grey) */
   --border: oklch(0.274 0.006 286.033);
   --input: oklch(0.274 0.006 286.033);
   --ring: oklch(0.434 0.187 271.691);
@@ -73,4 +74,24 @@
     background-color: var(--background);
     color: var(--foreground);
   }
+}
+
+/* =========================================
+  FIX AUTOFILL CHROME (GLOBAL OVERRIDE)
+  Agar kolom input tidak berubah jadi putih
+  saat ada password tersimpan
+  =========================================
+*/
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    /* Paksa teks jadi putih */
+    -webkit-text-fill-color: white !important;
+    
+    /* Paksa background tetap transparan dengan menunda transisi warna selama 50.000 detik */
+    transition: background-color 50000s ease-in-out 0s;
+    
+    /* Pastikan shadow inset transparan */
+    -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
 }

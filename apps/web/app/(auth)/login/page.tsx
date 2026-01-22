@@ -3,12 +3,13 @@
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import Image from "next/image"
 import { toast } from "sonner"
 import { AxiosError } from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Building2, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import api from "@/lib/axios"
 
 interface ApiErrorResponse {
@@ -75,11 +76,24 @@ function LoginContent() {
 
   return (
     <div className="w-full max-w-md space-y-8">
-      {/* HEADER */}
+      {/* HEADER LOGO */}
       <div className="flex flex-col items-center text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-900/40 mb-4">
-          <Building2 className="h-6 w-6 text-white" />
+        
+        {/* PERBAIKAN CONTAINER LOGO LOGIN:
+            1. Mengunci ukuran menjadi kotak h-32 w-32 (128px).
+            2. Menggunakan 'fill' agar gambar menyesuaikan kotak tersebut.
+            3. 'mb-6' memberi jarak ke teks.
+        */}
+        <div className="relative mb-6 h-32 w-32 shrink-0">
+          <Image 
+            src="/logo.png" 
+            alt="UniSpace Logo" 
+            fill
+            className="object-contain"
+            priority
+          />
         </div>
+        
         <h2 className="text-3xl font-bold tracking-tight text-white">
           Selamat Datang
         </h2>
@@ -88,7 +102,7 @@ function LoginContent() {
         </p>
       </div>
 
-      {/* CARD FORM - Glass Effect */}
+      {/* CARD FORM */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-md shadow-2xl">
         
         {successMessage && (

@@ -3,12 +3,13 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { toast } from "sonner"
 import { AxiosError } from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Building2, Loader2, ArrowLeft } from "lucide-react"
+import { Loader2, ArrowLeft } from "lucide-react"
 import api from "@/lib/axios"
 
 export default function RegisterPage() {
@@ -48,11 +49,22 @@ export default function RegisterPage() {
 
   return (
     <div className="w-full max-w-md space-y-8">
-      {/* HEADER */}
+      {/* HEADER LOGO */}
       <div className="flex flex-col items-center text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-900/40 mb-4">
-          <Building2 className="h-6 w-6 text-white" />
+        
+        {/* PERBAIKAN CONTAINER LOGO REGISTER:
+            Sama dengan login, dikunci di h-32 w-32 agar rapi.
+        */}
+        <div className="relative mb-6 h-32 w-32 shrink-0">
+          <Image 
+            src="/logo.png" 
+            alt="UniSpace Logo" 
+            fill
+            className="object-contain"
+            priority
+          />
         </div>
+
         <h2 className="text-3xl font-bold tracking-tight text-white">
           Buat Akun Baru
         </h2>
