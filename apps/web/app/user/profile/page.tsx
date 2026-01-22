@@ -14,7 +14,9 @@ import {
   Save, 
   Lock, 
   Fingerprint,
-  Users // Icon baru untuk Gender
+  Users, 
+  Building2, 
+  UserCog
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,9 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 
 /* =======================
    TYPES
@@ -37,9 +38,12 @@ type ProfileData = {
   department: string;
   position: string;
   identity_number: string;
-  gender: string; // [BARU] Wajib ada (L/P)
+  gender: string; 
   user_id?: string;
 };
+
+// URL Backend untuk akses gambar (jika path relatif)
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,7 @@ export default function UserProfilePage() {
     department: "",
     position: "",
     identity_number: "",
-    gender: "", // [BARU] Default kosong
+    gender: "", 
   });
 
   // State Ganti Password
@@ -93,7 +97,7 @@ export default function UserProfilePage() {
   }, []);
 
   /* =======================
-     2. HANDLE UPLOAD FOTO
+     2. HANDLE UPLOAD FOTO (FIXED)
   ======================= */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -109,16 +113,29 @@ export default function UserProfilePage() {
 
     setUploading(true);
     try {
+      // 1. Upload File ke Backend
       const res = await api.post("/profile/avatar", uploadData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       
-      const newUrl = res.data.url;
-      setFormData((prev) => ({ ...prev, avatar_url: newUrl }));
-      toast.success("Foto profil berhasil diupload");
+      const newUrl = res.data.avatar_url || res.data.url; 
+      
+      // 2. [PENTING] Langsung simpan URL baru ke Database Profile
+      // Kita gabungkan data form saat ini dengan URL foto baru
+      const updatedProfile = { ...formData, avatar_url: newUrl };
+      
+      await api.put("/profile", updatedProfile);
+
+      // 3. Update State Lokal & Beri Notifikasi
+      setFormData(updatedProfile);
+      toast.success("Foto profil berhasil diperbarui!");
+      
+      // 4. Reload halaman agar header (UserLayout) juga terupdate
+      setTimeout(() => window.location.reload(), 1000);
+
     } catch (error) {
       console.error(error);
-      toast.error("Gagal upload foto");
+      toast.error("Gagal mengupload foto");
     } finally {
       setUploading(false);
     }
@@ -133,8 +150,6 @@ export default function UserProfilePage() {
     try {
       await api.put("/profile", formData);
       toast.success("Profil berhasil diperbarui");
-      // Opsional: Reload untuk memastikan data fresh
-      // window.location.reload(); 
     } catch (error) {
       console.error(error);
       toast.error("Gagal menyimpan profil (Cek kelengkapan data)");
@@ -178,59 +193,82 @@ export default function UserProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      <div className="flex h-[80vh] w-full items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
       </div>
     );
   }
 
+  // Helper resolusi URL gambar agar konsisten dengan dashboard
   const getAvatarSrc = (path: string) => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
-    return `http://localhost:3000${path}`;
+    
+    // Fix path Windows
+    let cleanPath = path.replace(/\\/g, "/");
+    if (cleanPath.startsWith("/")) cleanPath = cleanPath.slice(1);
+    if (!cleanPath.startsWith("uploads/")) cleanPath = `uploads/${cleanPath}`;
+    
+    return `${BACKEND_URL}/${cleanPath}`;
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 md:p-12">
-      <div className="mx-auto max-w-5xl space-y-8">
-        
-        {/* HEADER */}
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Pengaturan Akun</h1>
-          <p className="text-slate-500 mt-1">Kelola informasi pribadi dan keamanan akun Anda.</p>
-        </div>
+    <div className="container mx-auto space-y-8 px-6 py-8 pb-20 text-slate-200">
+      
+      {/* HEADER PAGE */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight text-white">Pengaturan Akun</h1>
+        <p className="text-slate-400">
+          Kelola informasi pribadi dan keamanan akun Anda.
+        </p>
+      </div>
 
-        <Tabs defaultValue="biodata" className="w-full">
-          <TabsList className="bg-white border mb-6 p-1 h-12">
-            <TabsTrigger value="biodata" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 h-10 px-6">Biodata Diri</TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 h-10 px-6">Keamanan</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="biodata" className="w-full">
+        <TabsList className="bg-slate-900/50 border border-white/10 p-1 mb-6">
+          <TabsTrigger 
+            value="biodata" 
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 px-6"
+          >
+            <UserCog className="mr-2 h-4 w-4" />
+            Biodata Diri
+          </TabsTrigger>
+          <TabsTrigger 
+            value="security" 
+            className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 px-6"
+          >
+            <Lock className="mr-2 h-4 w-4" />
+            Keamanan
+          </TabsTrigger>
+        </TabsList>
 
-          {/* =======================
-              TAB 1: BIODATA
-          ======================= */}
-          <TabsContent value="biodata">
-            <div className="grid gap-8 md:grid-cols-[300px_1fr]">
-              
-              {/* KOLOM KIRI: AVATAR */}
-              <Card className="h-fit">
-                <CardContent className="pt-6 flex flex-col items-center text-center">
+        {/* ================= TAB 1: BIODATA ================= */}
+        <TabsContent value="biodata">
+          <div className="grid gap-6 md:grid-cols-12">
+            
+            {/* LEFT COLUMN: AVATAR */}
+            <div className="md:col-span-4 lg:col-span-3">
+              <Card className="border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl h-fit">
+                <CardContent className="pt-8 flex flex-col items-center text-center gap-6">
                   <div className="relative group">
-                    <Avatar className="h-32 w-32 border-4 border-slate-100 shadow-xl">
-                      <AvatarImage src={getAvatarSrc(formData.avatar_url)} className="object-cover" />
-                      <AvatarFallback className="text-4xl bg-slate-200 text-slate-500">
+                    <Avatar className="h-40 w-40 border-4 border-slate-800 shadow-2xl">
+                      <AvatarImage 
+                        src={getAvatarSrc(formData.avatar_url)} 
+                        className="object-cover" 
+                      />
+                      <AvatarFallback className="text-4xl bg-blue-600 text-white font-medium">
                         {formData.full_name?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
                     
+                    {/* Overlay Upload Button */}
                     <div 
+                      className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
                     >
-                      <Camera className="h-8 w-8" />
+                      <Camera className="h-8 w-8 text-white" />
                     </div>
                   </div>
-                  
+
                   <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -239,190 +277,220 @@ export default function UserProfilePage() {
                     onChange={handleFileChange}
                   />
 
-                  <h2 className="mt-4 text-lg font-semibold text-slate-900">
-                    {formData.full_name || "User Tanpa Nama"}
-                  </h2>
-                  <p className="text-sm text-slate-500">{formData.position || "Mahasiswa / Staff"}</p>
+                  <div className="space-y-1 w-full px-2">
+                    <h2 className="text-lg font-semibold text-white truncate">
+                      {formData.full_name || "User Tanpa Nama"}
+                    </h2>
+                    <p className="text-sm text-slate-400 truncate">{formData.position || "Mahasiswa / Staff"}</p>
+                  </div>
                   
-                  {uploading && <p className="text-xs text-emerald-600 mt-2 animate-pulse">Mengupload...</p>}
+                  {uploading ? (
+                    <Button disabled variant="outline" className="w-full border-white/10 bg-white/5 text-slate-400">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Mengupload...
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      className="w-full border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Camera className="mr-2 h-4 w-4" /> Ganti Foto
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
+            </div>
 
-              {/* KOLOM KANAN: FORM EDIT */}
-              <Card>
+            {/* RIGHT COLUMN: FORM DATA */}
+            <div className="md:col-span-8 lg:col-span-9">
+              <Card className="border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl">
                 <CardHeader>
-                  <CardTitle>Informasi Profil</CardTitle>
-                  <CardDescription>Lengkapi data diri Anda untuk keperluan administrasi.</CardDescription>
+                  <CardTitle className="text-xl text-white">Informasi Profil</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Lengkapi data diri Anda untuk keperluan administrasi kampus.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSaveProfile} className="space-y-6">
                     
-                    {/* Baris 1: Nama & NIM */}
-                    <div className="grid md:grid-cols-2 gap-4">
+                    {/* Row 1: Nama & NIM */}
+                    <div className="grid md:grid-cols-2 gap-5">
                       <div className="space-y-2">
-                        <Label>Nama Lengkap</Label>
+                        <Label className="text-slate-300">Nama Lengkap</Label>
                         <div className="relative">
-                           <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                           <Input 
-                             placeholder="Contoh: Ahmad Nur" 
-                             className="pl-9"
-                             value={formData.full_name}
-                             onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                           />
+                          <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input 
+                            placeholder="Contoh: Ahmad Nur" 
+                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                            value={formData.full_name}
+                            onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                          />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Nomor Identitas (NIM/NIDN)</Label>
-                         <div className="relative">
-                           <Fingerprint className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                           <Input 
-                             placeholder="Masukkan NIM / NIP" 
-                             className="pl-9"
-                             value={formData.identity_number}
-                             onChange={(e) => setFormData({...formData, identity_number: e.target.value})}
-                           />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Baris 2: Dept & Jabatan */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Departemen / Prodi</Label>
+                        <Label className="text-slate-300">NIM / NIDN</Label>
                         <div className="relative">
-                           <Briefcase className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                           <Input 
-                             placeholder="Contoh: Teknik Informatika" 
-                             className="pl-9"
-                             value={formData.department}
-                             onChange={(e) => setFormData({...formData, department: e.target.value})}
-                           />
+                          <Fingerprint className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input 
+                            placeholder="Nomor Induk" 
+                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                            value={formData.identity_number}
+                            onChange={(e) => setFormData({...formData, identity_number: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Dept & Jabatan */}
+                    <div className="grid md:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label className="text-slate-300">Departemen / Prodi</Label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input 
+                            placeholder="Contoh: Teknik Informatika" 
+                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                            value={formData.department}
+                            onChange={(e) => setFormData({...formData, department: e.target.value})}
+                          />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Posisi / Jabatan</Label>
-                        <Input 
-                           placeholder="Contoh: Mahasiswa / Dosen" 
-                           value={formData.position}
-                           onChange={(e) => setFormData({...formData, position: e.target.value})}
-                        />
+                        <Label className="text-slate-300">Posisi / Jabatan</Label>
+                        <div className="relative">
+                          <Briefcase className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input 
+                            placeholder="Contoh: Mahasiswa Semester 5" 
+                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                            value={formData.position}
+                            onChange={(e) => setFormData({...formData, position: e.target.value})}
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <Separator />
-
-                    {/* Baris 3: Telepon & Gender (Gender ditambahkan di sini) */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Nomor Telepon (WhatsApp)</Label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <Input 
-                                    placeholder="0812xxxx" 
-                                    className="pl-9"
-                                    type="tel"
-                                    value={formData.phone_number}
-                                    onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
-                                />
-                            </div>
+                    {/* Row 3: Telepon & Gender */}
+                    <div className="grid md:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label className="text-slate-300">Nomor Telepon (WA)</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input 
+                            placeholder="08xxxxxxxx" 
+                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                            type="tel"
+                            value={formData.phone_number}
+                            onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
+                          />
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                            <Label>Jenis Kelamin</Label>
-                            <div className="relative">
-                                <Users className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                {/* Menggunakan Select HTML standar tapi dengan styling Shadcn */}
-                                <select
-                                    className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={formData.gender}
-                                    onChange={(e) => setFormData({...formData, gender: e.target.value})}
-                                >
-                                    <option value="">-- Pilih --</option>
-                                    <option value="L">Laki-laki</option>
-                                    <option value="P">Perempuan</option>
-                                </select>
-                            </div>
+                      <div className="space-y-2">
+                        <Label className="text-slate-300">Jenis Kelamin</Label>
+                        <div className="relative">
+                          <Users className="absolute left-3 top-3 h-4 w-4 text-slate-500 z-10" />
+                          <select
+                            className="flex h-10 w-full rounded-md border border-white/10 bg-slate-950/50 pl-9 pr-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                            value={formData.gender}
+                            onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                          >
+                            <option value="" className="bg-slate-900 text-slate-400">-- Pilih Gender --</option>
+                            <option value="L" className="bg-slate-900">Laki-laki</option>
+                            <option value="P" className="bg-slate-900">Perempuan</option>
+                          </select>
                         </div>
+                      </div>
                     </div>
 
+                    {/* Address */}
                     <div className="space-y-2">
-                      <Label>Alamat</Label>
+                      <Label className="text-slate-300">Alamat Lengkap</Label>
                       <div className="relative">
+                        <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
                         <Textarea 
-                          placeholder="Alamat lengkap domisili saat ini..." 
-                          className="pl-9 min-h-[80px]"
+                          placeholder="Alamat domisili saat ini..." 
+                          className="pl-9 min-h-[100px] bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
                           value={formData.address}
                           onChange={(e) => setFormData({...formData, address: e.target.value})}
                         />
-                        <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                       </div>
                     </div>
 
-                    <div className="flex justify-end pt-4">
-                      <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
+                    <CardFooter className="flex justify-end p-0 pt-4 border-t border-white/5 mt-4">
+                      <Button 
+                        type="submit" 
+                        disabled={saving}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+                      >
                         {saving ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Menyimpan...
                           </>
                         ) : (
                           <>
-                            <Save className="mr-2 h-4 w-4" /> Simpan Perubahan
+                            <Save className="mr-2 h-4 w-4" />
+                            Simpan Perubahan
                           </>
                         )}
                       </Button>
-                    </div>
+                    </CardFooter>
 
                   </form>
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
+          </div>
+        </TabsContent>
 
-          {/* =======================
-              TAB 2: KEAMANAN
-          ======================= */}
-          <TabsContent value="security">
-            <Card className="max-w-2xl mx-auto">
+        {/* ================= TAB 2: KEAMANAN ================= */}
+        <TabsContent value="security">
+          <div className="flex justify-center">
+            <Card className="w-full max-w-2xl border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl">
               <CardHeader>
-                <CardTitle>Ganti Password</CardTitle>
-                <CardDescription>Pastikan akun Anda tetap aman dengan password yang kuat.</CardDescription>
+                <CardTitle className="text-white">Ganti Password</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Pastikan akun Anda tetap aman dengan password yang kuat.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleChangePassword} className="space-y-5">
                   <div className="space-y-2">
-                    <Label>Password Saat Ini</Label>
+                    <Label className="text-slate-300">Password Saat Ini</Label>
                     <div className="relative">
-                        <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
                         <Input 
                           type="password" 
                           placeholder="Masukkan password lama"
-                          className="pl-9"
+                          className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
                           value={passData.old_password}
                           onChange={(e) => setPassData({...passData, old_password: e.target.value})}
                         />
                     </div>
                   </div>
 
-                  <Separator />
+                  <div className="h-[1px] bg-white/10 my-2" />
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Password Baru</Label>
+                      <Label className="text-slate-300">Password Baru</Label>
                       <Input 
                         type="password" 
                         placeholder="Minimal 6 karakter"
+                        className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
                         value={passData.new_password}
                         onChange={(e) => setPassData({...passData, new_password: e.target.value})}
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Konfirmasi Password</Label>
+                      <Label className="text-slate-300">Konfirmasi Password</Label>
                       <Input 
                         type="password" 
                         placeholder="Ulangi password baru"
+                        className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
                         value={passData.confirm_password}
                         onChange={(e) => setPassData({...passData, confirm_password: e.target.value})}
                       />
@@ -430,17 +498,25 @@ export default function UserProfilePage() {
                   </div>
 
                   <div className="flex justify-end pt-4">
-                    <Button type="submit" variant="destructive" disabled={saving}>
-                      {saving ? "Memproses..." : "Update Password"}
+                    <Button 
+                      type="submit" 
+                      disabled={saving}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memproses...
+                        </>
+                      ) : "Update Password"}
                     </Button>
                   </div>
                 </form>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </TabsContent>
 
-      </div>
+      </Tabs>
     </div>
   );
 }

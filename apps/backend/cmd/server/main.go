@@ -22,7 +22,7 @@ func main() {
 	// ==========================
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("Warning: .env file tidak ditemukan")
+		log.Println("Warning: .env file tidak ditemukan, menggunakan environment variables sistem")
 	}
 
 	// ==========================
@@ -34,27 +34,30 @@ func main() {
 	// ==========================
 	// 3. INIT FIBER APP
 	// ==========================
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 10 * 1024 * 1024, // Limit Upload 10MB
+	})
 
 	// ==========================
 	// 3.1. SETUP CORS
 	// ==========================
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3001",
+		AllowOrigins: "http://localhost:3001, http://localhost:3000",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET, POST, HEAD, PUT, DELETE, PATCH",
 	}))
 
 	// ==========================
-	// 3.2. SETUP STATIC FOLDER (Uploads)
+	// 3.2. SETUP STATIC FOLDER
 	// ==========================
+	// Agar URL seperti http://localhost:3000/uploads/foto.jpg bisa dibuka
 	app.Static("/uploads", "./uploads")
 
 	// ==========================
 	// 4. PUBLIC ROUTES
 	// ==========================
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Backend Campus Reservation System jalan")
+		return c.SendString("Backend Campus Reservation System is Running...")
 	})
 
 	app.Post("/auth/register", auth.RegisterHandler(db))
@@ -64,56 +67,74 @@ func main() {
 	// 5. PROTECTED ROUTES (JWT)
 	// ==========================
 
-	// CEK USER LOGIN SAAT INI
+	// [DIPERBARUI] Endpoint /me sekarang mengambil avatar dari Profile
 	app.Get("/me", auth.JWTProtected(), func(c *fiber.Ctx) error {
 		userID := c.Locals("user_id").(string)
+
+		// 1. Ambil data akun utama (email, role, nama user)
 		userData, err := user.FindByID(db, userID)
 		if err != nil {
 			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
 		}
-		return c.JSON(userData)
+
+		// 2. Ambil data profile (untuk dapat avatar_url)
+		// Kita gunakan variabel temporary untuk avatar
+		avatarURL := ""
+		profileData, err := profile.GetByUserID(db, userID)
+		if err == nil && profileData != nil {
+			avatarURL = profileData.AvatarURL
+		}
+
+		// 3. Return gabungan data User + Avatar
+		return c.JSON(fiber.Map{
+			"id":         userData.ID,
+			"name":       userData.Name,
+			"email":      userData.Email,
+			"role":       userData.Role,
+			"avatar_url": avatarURL, // <--- Ini yang dicari frontend!
+		})
 	})
 
-	// [BARU] Change Password (Wajib ada untuk Tab Keamanan di Profil)
+	// Change Password
 	app.Post("/users/change-password", auth.JWTProtected(), user.ChangePasswordHandler(db))
 
 	// ==========================
 	// 6. FACILITY ROUTES
 	// ==========================
 	app.Post("/facilities", auth.JWTProtected(), auth.RequireRole("admin"), facility.CreateHandler(db))
-	app.Get("/facilities", auth.JWTProtected(), facility.ListHandler(db))
 	app.Put("/facilities/:id", auth.JWTProtected(), auth.RequireRole("admin"), facility.UpdateHandler(db))
 	app.Patch("/facilities/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), facility.ToggleStatusHandler(db))
 	app.Delete("/facilities/:id", auth.JWTProtected(), auth.RequireRole("admin"), facility.DeleteHandler(db))
+	app.Get("/facilities", auth.JWTProtected(), facility.ListHandler(db))
 
 	// ==========================
 	// 7. BOOKING ROUTES
 	// ==========================
 	app.Post("/bookings", auth.JWTProtected(), auth.RequireRole("user"), booking.CreateHandler(db))
-	app.Get("/bookings", auth.JWTProtected(), auth.RequireRole("admin"), booking.ListAllHandler(db))
 	app.Get("/bookings/me", auth.JWTProtected(), auth.RequireRole("user"), booking.MyBookingsHandler(db))
 	app.Delete("/bookings/:id", auth.JWTProtected(), auth.RequireRole("user"), booking.CancelHandler(db))
+	app.Get("/bookings", auth.JWTProtected(), auth.RequireRole("admin"), booking.ListAllHandler(db))
 	app.Patch("/bookings/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), booking.UpdateStatusHandler(db))
 
 	// ==========================
-	// 8. USER ROUTES (ADMIN ONLY)
+	// 8. USER ROUTES (ADMIN)
 	// ==========================
 	app.Get("/users", auth.JWTProtected(), auth.RequireRole("admin"), user.ListHandler(db))
 	app.Patch("/users/:id/role", auth.JWTProtected(), auth.RequireRole("admin"), user.UpdateRoleHandler(db))
 	app.Delete("/users/:id", auth.JWTProtected(), auth.RequireRole("admin"), user.DeleteUserHandler(db))
 
 	// ==========================
-	// 9. DASHBOARD STATS (ADMIN ONLY)
+	// 9. DASHBOARD STATS (ADMIN)
 	// ==========================
 	app.Get("/dashboard/stats", auth.JWTProtected(), auth.RequireRole("admin"), dashboard.DashboardHandler(db))
 
 	// ==========================
-	// 10. PROFILE ROUTES (USER & ADMIN)
+	// 10. PROFILE ROUTES
 	// ==========================
 	app.Get("/profile", auth.JWTProtected(), profile.GetHandler(db))
 	app.Put("/profile", auth.JWTProtected(), profile.UpdateHandler(db))
 
-	// [BARU] Upload Avatar (Wajib ada untuk fitur ganti foto)
+	// Upload Avatar
 	app.Post("/profile/avatar", auth.JWTProtected(), profile.UploadAvatarHandler)
 
 	// ==========================
