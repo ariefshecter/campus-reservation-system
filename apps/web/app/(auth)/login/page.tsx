@@ -7,23 +7,19 @@ import { toast } from "sonner"
 import { AxiosError } from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Building2, Loader2 } from "lucide-react"
 import api from "@/lib/axios"
 
 interface ApiErrorResponse {
   error: string;
 }
 
-// ==========================================
-// BAGIAN 1: LOGIKA FORM (LOGIN CONTENT)
-// ==========================================
 function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
   const [loading, setLoading] = useState(false)
-  // State baru untuk menyimpan pesan sukses yang menetap
   const [successMessage, setSuccessMessage] = useState("") 
   
   const [formData, setFormData] = useState({
@@ -31,13 +27,9 @@ function LoginContent() {
     password: "",
   })
 
-  // Efek: Cek URL apakah ada sinyal 'registered=true'
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
-      // Set pesan ke state agar muncul sebagai teks statis
-      setSuccessMessage("Registrasi berhasil! Silakan login dengan akun baru Anda.")
-      
-      // Bersihkan URL agar bersih, tapi pesan tetap ada di state
+      setSuccessMessage("Registrasi berhasil! Silakan login.")
       router.replace("/login")
     }
   }, [searchParams, router])
@@ -82,71 +74,81 @@ function LoginContent() {
   }
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold text-slate-800">
-          Login Kampus
-        </CardTitle>
-        <CardDescription>
-          Masuk untuk melakukan reservasi ruangan
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="w-full max-w-md space-y-8">
+      {/* HEADER */}
+      <div className="flex flex-col items-center text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-900/40 mb-4">
+          <Building2 className="h-6 w-6 text-white" />
+        </div>
+        <h2 className="text-3xl font-bold tracking-tight text-white">
+          Selamat Datang
+        </h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Masuk untuk mengelola reservasi ruangan kampus
+        </p>
+      </div>
+
+      {/* CARD FORM - Glass Effect */}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-md shadow-2xl">
         
-        {/* FITUR BARU: Menampilkan Alert Hijau jika ada successMessage */}
         {successMessage && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm text-center">
+          <div className="mb-6 p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm text-center font-medium">
             {successMessage}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-slate-200">Email Kampus</Label>
             <Input 
               id="email" 
               name="email" 
               type="email" 
               placeholder="nama@unu.ac.id" 
               required 
+              className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
               value={formData.email}
               onChange={handleChange}
             />
           </div>
+          
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-slate-200">Password</Label>
             <Input 
               id="password" 
               name="password" 
               type="password" 
               placeholder="••••••••"
               required 
+              className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
               value={formData.password}
               onChange={handleChange}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Memproses..." : "Masuk"}
+
+          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-6" disabled={loading}>
+            {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Masuk ke UniSpace"}
           </Button>
         </form>
-        
-        <div className="mt-6 text-center text-sm text-slate-500">
-          Belum punya akun?{" "}
-          <Link href="/register" className="text-blue-600 hover:underline font-medium">
-            Daftar disini
+
+        <div className="mt-6 text-center text-sm">
+          <span className="text-slate-400">Belum punya akun? </span>
+          <Link href="/register" className="font-medium text-blue-400 hover:text-blue-300 hover:underline transition">
+            Daftar sekarang
           </Link>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      
+      <div className="text-center text-xs text-slate-500">
+        &copy; {new Date().getFullYear()} UniSpace Campus Reservation
+      </div>
+    </div>
   )
 }
 
-// ==========================================
-// BAGIAN 2: HALAMAN UTAMA (PAGE)
-// ==========================================
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="text-center">Memuat form login...</div>}>
+    <Suspense fallback={<div className="text-white">Memuat...</div>}>
       <LoginContent />
     </Suspense>
   )
