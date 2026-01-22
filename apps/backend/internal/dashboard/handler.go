@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -40,21 +42,17 @@ type DashboardStats struct {
 // LOGIC
 // ==========================
 func GetStats(db *sql.DB) (DashboardStats, error) {
-	var stats DashboardStats
+	// Inisialisasi slice dengan array kosong agar JSON return "[]" bukan "null"
+	stats := DashboardStats{
+		TopFacilities:  []TopFacility{},
+		RecentBookings: []RecentBooking{},
+		PeakHours:      []PeakHour{},
+	}
 
 	// 1. Hitung Angka Utama
-
-	// Total Users
 	db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'user'").Scan(&stats.TotalUsers)
-
-	// Total Facilities
 	db.QueryRow("SELECT COUNT(*) FROM facilities WHERE deleted_at IS NULL").Scan(&stats.TotalFacilities)
-
-	// Pending Bookings
 	db.QueryRow("SELECT COUNT(*) FROM bookings WHERE status = 'pending'").Scan(&stats.PendingBookings)
-
-	// Active Bookings
-	// PERBAIKAN: Hanya hitung yg approved DAN waktu selesai belum lewat (end_time > NOW())
 	db.QueryRow("SELECT COUNT(*) FROM bookings WHERE status = 'approved' AND end_time > NOW()").Scan(&stats.ActiveBookings)
 
 	// 2. Ambil 5 Fasilitas Terpopuler
@@ -77,34 +75,43 @@ func GetStats(db *sql.DB) (DashboardStats, error) {
 		}
 	}
 
-	// 3. Ambil 5 Aktivitas Terbaru
-	// PERBAIKAN: Gunakan CASE WHEN untuk ubah status 'approved' lewat waktu jadi 'completed'
-	recentRows, err := db.Query(`
+	// 3. Ambil 5 Aktivitas Terbaru (REVISI: Casting ke TEXT)
+	recentQuery := `
 		SELECT 
-			u.name, 
-			f.name, 
-			CASE 
-				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
-				ELSE b.status 
-			END as status,
-			to_char(b.created_at, 'DD Mon YYYY HH24:MI')
+			COALESCE(u.name, 'Unknown User'), 
+			COALESCE(f.name, 'Unknown Facility'), 
+			CAST(
+				CASE 
+					WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
+					ELSE CAST(b.status AS TEXT) 
+				END 
+			AS TEXT),
+			TO_CHAR(b.created_at, 'DD Mon YYYY HH24:MI')
 		FROM bookings b
-		JOIN users u ON b.user_id = u.id
-		JOIN facilities f ON b.facility_id = f.id
+		LEFT JOIN users u ON b.user_id = u.id
+		LEFT JOIN facilities f ON b.facility_id = f.id
 		ORDER BY b.created_at DESC
 		LIMIT 5
-	`)
-	if err == nil {
+	`
+
+	recentRows, err := db.Query(recentQuery)
+	if err != nil {
+		log.Println("Error query recent bookings:", err)
+	} else {
 		defer recentRows.Close()
 		for recentRows.Next() {
 			var rb RecentBooking
+			// Scan sekarang aman karena tipe data sudah pasti TEXT/STRING semua
 			if err := recentRows.Scan(&rb.User, &rb.Facility, &rb.Status, &rb.CreatedAt); err == nil {
 				stats.RecentBookings = append(stats.RecentBookings, rb)
+			} else {
+				// Debug log: Jika ini muncul di terminal, berarti ada masalah mapping
+				fmt.Println("Error scanning row:", err)
 			}
 		}
 	}
 
-	// 4. Hitung Jam Sibuk (Konversi UTC ke WIB Manual)
+	// 4. Hitung Jam Sibuk
 	hoursMap := make(map[int]int)
 	for i := 0; i < 24; i++ {
 		hoursMap[i] = 0
@@ -122,14 +129,12 @@ func GetStats(db *sql.DB) (DashboardStats, error) {
 		for peakRows.Next() {
 			var utcHour, count int
 			if err := peakRows.Scan(&utcHour, &count); err == nil {
-				// LOGIC KONVERSI: UTC + 7 Jam = WIB
 				wibHour := (utcHour + 7) % 24
 				hoursMap[wibHour] += count
 			}
 		}
 	}
 
-	// Filter jam kerja kampus (08:00 - 17:00) untuk dikirim ke Frontend
 	for h := 8; h <= 17; h++ {
 		stats.PeakHours = append(stats.PeakHours, PeakHour{Hour: h, Count: hoursMap[h]})
 	}
@@ -144,6 +149,7 @@ func DashboardHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		stats, err := GetStats(db)
 		if err != nil {
+			log.Println("Dashboard Error:", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Gagal mengambil data statistik"})
 		}
 		return c.JSON(stats)

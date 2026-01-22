@@ -87,13 +87,18 @@ export default function BookingModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      {/* PERUBAHAN UI DI SINI:
+         - bg-white: Memaksa background putih
+         - text-slate-900: Memaksa teks hitam/gelap
+         - border-slate-200: Memberikan border halus
+      */}
+      <DialogContent className="sm:max-w-md bg-white text-slate-900 border-slate-200 shadow-2xl">
         <DialogHeader>
-          <DialogTitle>Booking Ruangan</DialogTitle>
+          <DialogTitle className="text-slate-900">Booking Ruangan</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="text-sm font-medium">
+          <div className="text-sm font-medium text-slate-700">
             {facilityName}
           </div>
 
@@ -101,6 +106,8 @@ export default function BookingModal({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            // Memaksa input terlihat terang & bersih
+            className="bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus-visible:ring-slate-400"
           />
 
           <div className="grid grid-cols-2 gap-3">
@@ -110,6 +117,7 @@ export default function BookingModal({
               max="16:00"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
+              className="bg-white border-slate-300 text-slate-900 focus-visible:ring-slate-400"
             />
             <Input
               type="time"
@@ -117,6 +125,7 @@ export default function BookingModal({
               max="16:00"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
+              className="bg-white border-slate-300 text-slate-900 focus-visible:ring-slate-400"
             />
           </div>
 
@@ -124,22 +133,31 @@ export default function BookingModal({
             placeholder="Keperluan penggunaan ruangan"
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
+            // Memaksa textarea terang
+            className="bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus-visible:ring-slate-400 resize-none"
           />
 
           {!isFormValid && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-red-500/80">
               Jam booking harus 08.00–16.00 dan jam selesai
               lebih besar dari jam mulai
             </p>
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              // Tombol Batal yang kontras
+              className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            >
               Batal
             </Button>
             <Button
               onClick={submitBooking}
               disabled={!isFormValid || loading}
+              // Tombol Submit solid gelap agar menonjol
+              className="bg-slate-900 text-white hover:bg-slate-800"
             >
               {loading ? "Menyimpan..." : "Ajukan Booking"}
             </Button>
