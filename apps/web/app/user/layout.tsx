@@ -8,9 +8,7 @@ import api from "@/lib/axios";
 import { 
   LogOut, 
   User as UserIcon, 
-  ChevronDown,
-  LayoutDashboard,
-  CalendarDays
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -149,6 +147,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
                 <Button 
                   variant="ghost" 
                   className="relative h-10 w-auto rounded-full pl-2 pr-4 hover:bg-white/10 border border-transparent hover:border-white/10 transition-all gap-3"
+                  suppressHydrationWarning={true}
                 >
                   <Avatar className="h-8 w-8 border border-white/10">
                     <AvatarImage 
