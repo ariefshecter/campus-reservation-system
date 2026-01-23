@@ -106,6 +106,7 @@ func main() {
 	app.Patch("/facilities/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), facility.ToggleStatusHandler(db))
 	app.Delete("/facilities/:id", auth.JWTProtected(), auth.RequireRole("admin"), facility.DeleteHandler(db))
 	app.Get("/facilities", auth.JWTProtected(), facility.ListHandler(db))
+	app.Get("/facilities/:id", auth.JWTProtected(), facility.GetOneHandler(db)) // <--- TAMBAHKAN INI
 
 	// ==========================
 	// 7. BOOKING ROUTES

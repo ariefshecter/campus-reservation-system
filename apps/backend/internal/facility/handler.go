@@ -11,6 +11,42 @@ import (
 )
 
 // ==========================
+// HELPER: PROCESS UPLOADS
+// ==========================
+// Fungsi ini menangani upload multiple files (Maksimal 4)
+func processUploads(c *fiber.Ctx) []string {
+	// Ambil Multipart Form
+	form, err := c.MultipartForm()
+	if err != nil {
+		return []string{}
+	}
+
+	// Ambil file dari key "photos" (harus sesuai dengan yang dikirim frontend)
+	files := form.File["photos"]
+	var photoURLs []string
+
+	// Loop setiap file
+	for i, file := range files {
+		// Batasi hanya 4 foto
+		if i >= 4 {
+			break
+		}
+
+		// Buat nama unik: timestamp-index-namafile
+		filename := fmt.Sprintf("%d-%d-%s", time.Now().Unix(), i, file.Filename)
+
+		// Simpan ke folder uploads
+		savePath := filepath.Join("./uploads", filename)
+		if err := c.SaveFile(file, savePath); err == nil {
+			// Jika sukses, tambahkan URL ke list
+			photoURLs = append(photoURLs, fmt.Sprintf("/uploads/%s", filename))
+		}
+	}
+
+	return photoURLs
+}
+
+// ==========================
 // CREATE FASILITAS
 // ==========================
 func CreateHandler(db *sql.DB) fiber.Handler {
@@ -21,26 +57,12 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 		name := c.FormValue("name")
 		description := c.FormValue("description")
 		location := c.FormValue("location")
-
-		// Konversi String ke Angka (Karena FormData selalu string)
 		capacity, _ := strconv.Atoi(c.FormValue("capacity"))
 		price, _ := strconv.ParseFloat(c.FormValue("price"), 64)
 
-		// 2. Handle Upload Foto
-		var photoURL string
-		file, err := c.FormFile("photo")
-
-		if err == nil {
-			// Buat nama file unik: timestamp-namafile
-			filename := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
-
-			// Simpan ke folder uploads
-			savePath := filepath.Join("./uploads", filename)
-			if err := c.SaveFile(file, savePath); err == nil {
-				// Set URL
-				photoURL = fmt.Sprintf("/uploads/%s", filename)
-			}
-		}
+		// 2. Handle Multiple Upload
+		// Panggil helper function kita
+		photoURLs := processUploads(c)
 
 		// 3. Simpan ke DB
 		f := Facility{
@@ -49,10 +71,10 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			Location:    location,
 			Capacity:    capacity,
 			Price:       price,
-			PhotoURL:    photoURL,
+			PhotoURL:    photoURLs, // Field ini sekarang adalah []string (Array)
 		}
 
-		if err := CreateFacility(db, f, userID); err != nil {
+		if err := Insert(db, f, userID); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -65,11 +87,30 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 // ==========================
 func ListHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Menggunakan repository FindAll yang baru
 		data, err := FindAll(db)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Gagal ambil data"})
 		}
+		return c.JSON(data)
+	}
+}
+
+// ==========================
+// GET ONE DETAIL (WAJIB ADA)
+// ==========================
+func GetOneHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+
+		// Menggunakan fungsi FindByID yang sudah ada di repository.go
+		data, err := FindByID(db, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return c.Status(404).JSON(fiber.Map{"error": "Fasilitas tidak ditemukan"})
+			}
+			return c.Status(500).JSON(fiber.Map{"error": "Database error"})
+		}
+
 		return c.JSON(data)
 	}
 }
@@ -82,13 +123,13 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 		id := c.Params("id")
 		userID := c.Locals("user_id").(string)
 
-		// 1. Ambil data lama dulu (untuk cek foto lama)
+		// 1. Ambil data lama (untuk cek foto lama)
 		oldData, err := FindByID(db, id)
 		if err != nil {
 			return c.Status(404).JSON(fiber.Map{"error": "Fasilitas tidak ditemukan"})
 		}
 
-		// 2. Ambil Data Baru dari Form
+		// 2. Ambil Data Baru
 		name := c.FormValue("name")
 		description := c.FormValue("description")
 		location := c.FormValue("location")
@@ -96,16 +137,14 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 		price, _ := strconv.ParseFloat(c.FormValue("price"), 64)
 
 		// 3. Cek Foto Baru
-		photoURL := oldData.PhotoURL // Default: Pakai foto lama
-		file, err := c.FormFile("photo")
+		newPhotos := processUploads(c)
 
-		if err == nil {
-			// Ada foto baru, simpan dan ganti URL
-			filename := fmt.Sprintf("%d-%s", time.Now().Unix(), file.Filename)
-			savePath := filepath.Join("./uploads", filename)
-			if err := c.SaveFile(file, savePath); err == nil {
-				photoURL = fmt.Sprintf("/uploads/%s", filename)
-			}
+		// Logika Update Foto:
+		// Jika ada foto baru diupload -> Ganti foto lama dengan yang baru.
+		// Jika tidak ada foto baru -> Tetap pakai foto lama.
+		finalPhotos := oldData.PhotoURL
+		if len(newPhotos) > 0 {
+			finalPhotos = newPhotos
 		}
 
 		// 4. Update Database
@@ -115,7 +154,7 @@ func UpdateHandler(db *sql.DB) fiber.Handler {
 			Location:    location,
 			Capacity:    capacity,
 			Price:       price,
-			PhotoURL:    photoURL,
+			PhotoURL:    finalPhotos,
 		}
 
 		if err := Update(db, id, newData, userID); err != nil {
@@ -148,7 +187,6 @@ func ToggleStatusHandler(db *sql.DB) fiber.Handler {
 		id := c.Params("id")
 		userID := c.Locals("user_id").(string)
 
-		// Baca JSON body: { "is_active": true/false }
 		var req struct {
 			IsActive bool `json:"is_active"`
 		}

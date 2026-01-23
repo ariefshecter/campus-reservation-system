@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight, ImageIcon } from "lucide-react"; 
 import api from "@/lib/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ import BookingModal from "@/components/booking/booking-modal";
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
-const FALLBACK_IMAGE = "/room-placeholder.png";
+// Gunakan placeholder jika foto kosong/error
+const FALLBACK_IMAGE = "/room-placeholder.png"; 
 
 /* =======================
    TYPES
@@ -32,7 +34,7 @@ type Facility = {
   name: string;
   capacity: number;
   location: string;
-  photo_url: string;
+  photo_url: string[]; // UBAH: Jadi array string
 };
 
 type Booking = {
@@ -47,6 +49,125 @@ function resolveImage(src: string): string {
   if (!src || src.trim() === "") return FALLBACK_IMAGE;
   if (src.startsWith("http")) return src;
   return `${BACKEND_URL}${src}`;
+}
+
+/* =======================
+   SUB-COMPONENT: CARD WITH SLIDER
+======================= */
+function FacilityCard({ 
+  facility, 
+  onBook 
+}: { 
+  facility: Facility; 
+  onBook: (f: Facility) => void 
+}) {
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
+
+  // Pastikan photos adalah array. Jika null/undefined, jadikan array kosong.
+  const photos = Array.isArray(facility.photo_url) && facility.photo_url.length > 0
+    ? facility.photo_url
+    : [];
+
+  const hasMultiplePhotos = photos.length > 1;
+  const currentSrc = photos.length > 0 ? photos[currentImgIndex] : "";
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.preventDefault(); // Mencegah link detail terklik
+    e.stopPropagation();
+    setCurrentImgIndex((prev) => (prev + 1) % photos.length);
+  };
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCurrentImgIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  };
+
+  return (
+    <Card className="relative overflow-hidden rounded-2xl bg-slate-100 shadow flex flex-col h-full group/card hover:shadow-lg transition-all duration-300">
+      {/* --- THUMBNAIL SLIDER --- */}
+      <div className="relative h-44 group bg-slate-200 overflow-hidden">
+        {currentSrc ? (
+          <Image
+            src={resolveImage(currentSrc)}
+            alt={`${facility.name} - ${currentImgIndex + 1}`}
+            fill
+            unoptimized
+            className="object-cover transition-transform duration-500 group-hover/card:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-slate-400">
+            <ImageIcon className="h-10 w-10" />
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        
+        <Badge className="absolute right-3 top-3 bg-slate-900/70 text-slate-100 backdrop-blur-sm border-0">
+          {facility.capacity} Org
+        </Badge>
+
+        {/* Slider Controls (Hanya jika > 1 foto) */}
+        {hasMultiplePhotos && (
+          <>
+            {/* Left Button */}
+            <button 
+              onClick={prevImage}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-10"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+
+            {/* Right Button */}
+            <button 
+              onClick={nextImage}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-10"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+
+            {/* Dots Indicator */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {photos.map((_, idx) => (
+                <div 
+                  key={idx} 
+                  className={`h-1.5 w-1.5 rounded-full transition-all shadow-sm ${
+                    idx === currentImgIndex ? "bg-white w-3" : "bg-white/50"
+                  }`} 
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <CardContent className="space-y-4 p-5 flex flex-col flex-1">
+        <div className="flex-1">
+          <p className="font-semibold text-slate-900 line-clamp-1">
+            {facility.name}
+          </p>
+          <p className="text-sm text-slate-600 line-clamp-1">
+            {facility.location}
+          </p>
+        </div>
+
+        {/* --- ACTION BUTTONS (Updated) --- */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link href={`/user/facilities/${facility.id}`} className="w-full" tabIndex={-1}>
+             <Button variant="outline" className="w-full border-slate-300 text-slate-700 hover:bg-slate-200">
+                Detail
+             </Button>
+          </Link>
+          <Button
+            className="w-full bg-slate-900 hover:bg-slate-800"
+            onClick={() => onBook(facility)}
+          >
+            Booking
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 /* =======================
@@ -65,26 +186,36 @@ export default function UserDashboardPage() {
 
   /* =======================
      INITIAL LOAD
-     (eslint-safe)
   ======================= */
   useEffect(() => {
     (async () => {
-      const [profileRes, facilityRes, bookingRes] =
-        await Promise.all([
-          api.get<Profile>("/profile"),
-          api.get<Facility[]>("/facilities"),
-          api.get<Booking[]>("/bookings/me"),
-        ]);
+      try {
+        const [profileRes, facilityRes, bookingRes] =
+          await Promise.all([
+            api.get<Profile>("/profile"),
+            api.get<Facility[]>("/facilities"),
+            api.get<Booking[]>("/bookings/me"),
+          ]);
 
-      setProfile(profileRes.data);
-      setFacilities(facilityRes.data ?? []);
-      setBookings(bookingRes.data ?? []);
+        setProfile(profileRes.data);
+        
+        // Pastikan photo_url di-map sebagai array jika backend mengirim null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const safeFacilities = (facilityRes.data ?? []).map((f: any) => ({
+          ...f,
+          photo_url: Array.isArray(f.photo_url) ? f.photo_url : []
+        }));
+        
+        setFacilities(safeFacilities);
+        setBookings(bookingRes.data ?? []);
+      } catch (error) {
+        console.error("Gagal memuat dashboard:", error);
+      }
     })();
   }, []);
 
   /* =======================
      REFRESH BOOKINGS ONLY
-     (dipanggil setelah booking sukses)
   ======================= */
   const refreshBookings = async () => {
     const res = await api.get<Booking[]>("/bookings/me");
@@ -153,6 +284,7 @@ export default function UserDashboardPage() {
                 placeholder="Cari Aula, Lab Komputer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                className="bg-slate-100/10 text-slate-100 placeholder:text-slate-400 border-slate-500/30 focus-visible:ring-slate-400"
               />
             </div>
           </div>
@@ -160,28 +292,28 @@ export default function UserDashboardPage() {
 
         {/* ===== STATS ===== */}
         <section className="grid gap-8 md:grid-cols-2">
-          <div className="rounded-2xl bg-blue-500/15 px-8 py-7">
+          <div className="rounded-2xl bg-blue-500/15 px-8 py-7 border border-blue-500/20 backdrop-blur-sm">
             <p className="text-sm text-slate-300">Pending</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {pendingCount}
             </p>
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-400 mt-1">
               Menunggu Persetujuan
             </p>
           </div>
 
-          <div className="rounded-2xl bg-emerald-500/15 px-8 py-7">
+          <div className="rounded-2xl bg-emerald-500/15 px-8 py-7 border border-emerald-500/20 backdrop-blur-sm">
             <p className="text-sm text-slate-300">Disetujui</p>
             <p className="mt-3 text-4xl font-semibold text-slate-50">
               {approvedCount}
             </p>
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-400 mt-1">
               Booking Aktif
             </p>
           </div>
         </section>
 
-        {/* ===== FACILITY ===== */}
+        {/* ===== FACILITY CATALOG ===== */}
         <section>
           <h2 className="mb-6 text-lg font-semibold text-slate-100">
             Katalog Fasilitas
@@ -189,45 +321,14 @@ export default function UserDashboardPage() {
 
           <div className="grid gap-8 md:grid-cols-3">
             {filteredFacilities.map((f) => (
-              <Card
-                key={f.id}
-                className="relative overflow-hidden rounded-2xl bg-slate-100 shadow"
-              >
-                <div className="relative h-44">
-                  <Image
-                    src={resolveImage(f.photo_url)}
-                    alt={f.name}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <Badge className="absolute right-3 top-3 bg-slate-900/70 text-slate-100">
-                    {f.capacity} Org
-                  </Badge>
-                </div>
-
-                <CardContent className="space-y-4 p-5">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {f.name}
-                    </p>
-                    <p className="text-sm text-slate-600">
-                      {f.location}
-                    </p>
-                  </div>
-
-                  <Button
-                    className="w-full bg-slate-900 hover:bg-slate-800"
-                    onClick={() => {
-                      setSelectedFacility(f);
-                      setOpenBooking(true);
-                    }}
-                  >
-                    Booking Sekarang
-                  </Button>
-                </CardContent>
-              </Card>
+              <FacilityCard 
+                key={f.id} 
+                facility={f} 
+                onBook={(facility) => {
+                  setSelectedFacility(facility);
+                  setOpenBooking(true);
+                }} 
+              />
             ))}
           </div>
         </section>
