@@ -34,7 +34,8 @@ type Facility = {
   name: string;
   capacity: number;
   location: string;
-  photo_url: string[]; // UBAH: Jadi array string
+  photo_url: string[];
+  is_active: boolean; // UPDATE: Menambahkan status aktif
 };
 
 type Booking = {
@@ -158,11 +159,18 @@ function FacilityCard({
                 Detail
              </Button>
           </Link>
+          
+          {/* UPDATE: Tombol Booking dengan logika status */}
           <Button
-            className="w-full bg-slate-900 hover:bg-slate-800"
+            className={`w-full ${
+              facility.is_active 
+                ? "bg-slate-900 hover:bg-slate-800" 
+                : "bg-slate-300 text-slate-500 cursor-not-allowed hover:bg-slate-300"
+            }`}
             onClick={() => onBook(facility)}
+            disabled={!facility.is_active}
           >
-            Booking
+            {facility.is_active ? "Booking" : "Non-Aktif"}
           </Button>
         </div>
       </CardContent>
@@ -185,7 +193,7 @@ export default function UserDashboardPage() {
     useState<Facility | null>(null);
 
   /* =======================
-     INITIAL LOAD
+      INITIAL LOAD
   ======================= */
   useEffect(() => {
     (async () => {
@@ -215,7 +223,7 @@ export default function UserDashboardPage() {
   }, []);
 
   /* =======================
-     REFRESH BOOKINGS ONLY
+      REFRESH BOOKINGS ONLY
   ======================= */
   const refreshBookings = async () => {
     const res = await api.get<Booking[]>("/bookings/me");
@@ -223,7 +231,7 @@ export default function UserDashboardPage() {
   };
 
   /* =======================
-     DERIVED STATE
+      DERIVED STATE
   ======================= */
   const isProfileIncomplete =
     !profile?.phone_number || !profile?.identity_number;
@@ -246,7 +254,7 @@ export default function UserDashboardPage() {
   ).length;
 
   /* =======================
-     RENDER
+      RENDER
   ======================= */
   return (
     <div className="min-h-screen bg-[radial-gradient(900px_circle_at_20%_10%,#1e3f78,transparent_45%),radial-gradient(700px_circle_at_80%_20%,#102b52,transparent_50%),linear-gradient(180deg,#071a33,#041225)] px-6 py-12">

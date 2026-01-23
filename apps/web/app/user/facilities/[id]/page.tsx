@@ -9,6 +9,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Share2,
   Info,
   Building2,
   Loader2,
@@ -152,12 +153,15 @@ export default function FacilityDetailPage() {
               {facility.name}
             </span>
           </div>
+          <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white hover:bg-white/10 rounded-full h-9 w-9">
+            <Share2 className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       <main className="max-w-6xl mx-auto px-4 md:px-6 py-8">
         
-        {/* ===== LAYOUT UTAMA: SIDE BY SIDE (FOTO KIRI, INFO KANAN) ===== */}
+        {/* ===== LAYOUT UTAMA: SIDE BY SIDE ===== */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
           
           {/* KOLOM KIRI: IMAGE SLIDER */}
@@ -165,11 +169,12 @@ export default function FacilityDetailPage() {
             <div className="group relative w-full aspect-[4/3] bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg ring-1 ring-white/5">
               
               {currentSrc ? (
+                // PERBAIKAN DI SINI: Hapus class transition dan group-hover:scale
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={resolvedUrl}
                   alt={facility.name}
-                  className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-105"
+                  className="w-full h-full object-cover" 
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-3">
@@ -237,12 +242,12 @@ export default function FacilityDetailPage() {
             
             {/* 1. Header Info */}
             <div>
-              {/* NAMA RUANGAN (Diperbesar) */}
+              {/* NAMA RUANGAN */}
               <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-6">
                 {facility.name}
               </h1>
               
-              {/* DETAILS (Jarak diperlebar mb-6) */}
+              {/* DETAILS */}
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <div className="flex items-center gap-2 text-indigo-300 bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-500/20">
                   <MapPin className="w-4 h-4" />
@@ -266,11 +271,11 @@ export default function FacilityDetailPage() {
               </div>
             </div>
 
-            {/* 3. Booking Action (Bottom aligned) */}
+            {/* 3. Booking Action */}
             <div className="pt-6 border-t border-white/10">
               <div className="flex items-center justify-between gap-6">
                 
-                {/* Harga (Diperkecil) */}
+                {/* Harga */}
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Harga Sewa</p>
                   <span className="text-2xl font-bold text-white">
@@ -278,7 +283,7 @@ export default function FacilityDetailPage() {
                   </span>
                 </div>
 
-                {/* Tombol Booking (Tanpa Icon, Ukuran pas) */}
+                {/* Tombol Booking */}
                 <Button
                   className={`px-8 h-12 font-semibold rounded-lg shadow-md transition-all active:scale-95 text-base ${
                     facility.is_active
