@@ -43,7 +43,7 @@ export function AdminSidebar() {
 
   const handleLogout = () => {
     logout()
-    router.push("/auth/login")
+    router.push("/login")
   }
 
   return (

@@ -20,18 +20,40 @@ type Booking struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// 1. Tambahkan Struct Profile (Sama persis dengan package user)
+type Profile struct {
+	FullName       string `json:"full_name"`
+	PhoneNumber    string `json:"phone_number"`
+	Address        string `json:"address"`
+	AvatarURL      string `json:"avatar_url"`
+	Gender         string `json:"gender"`
+	IdentityNumber string `json:"identity_number"`
+	Department     string `json:"department"`
+	Position       string `json:"position"`
+}
+
+// 2. Tambahkan Struct BookingUser untuk menampung data user + profile nested
+type BookingUser struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Email   string  `json:"email"`
+	Profile Profile `json:"profile"`
+}
+
+// 3. Update BookingResponse agar menyertakan object User
 type BookingResponse struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"user_id"`
-	UserName     string    `json:"user_name"`
-	FacilityID   string    `json:"facility_id"`
-	FacilityName string    `json:"facility_name"`
-	StartTime    time.Time `json:"start_time"`
-	EndTime      time.Time `json:"end_time"`
-	Status       string    `json:"status"`
-	Purpose      string    `json:"purpose"`
-	CreatedAt    time.Time `json:"created_at"`
-	AdminName    string    `json:"admin_name"`
+	ID           string      `json:"id"`
+	UserID       string      `json:"user_id"`   // Tetap ada untuk backward compatibility
+	UserName     string      `json:"user_name"` // Tetap ada untuk backward compatibility
+	User         BookingUser `json:"user"`      // <--- FIELD BARU: Object User Lengkap
+	FacilityID   string      `json:"facility_id"`
+	FacilityName string      `json:"facility_name"`
+	StartTime    time.Time   `json:"start_time"`
+	EndTime      time.Time   `json:"end_time"`
+	Status       string      `json:"status"`
+	Purpose      string      `json:"purpose"`
+	CreatedAt    time.Time   `json:"created_at"`
+	AdminName    string      `json:"admin_name"`
 }
 
 // ========================================================
@@ -172,34 +194,43 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 // ========================================================
 
 func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
-	// PERBAIKAN: Tambahkan ::text pada ELSE b.status
+	// Query kita update untuk LEFT JOIN ke profiles
 	rows, err := db.Query(`
-		SELECT
-			b.id,
-			b.user_id,
-			COALESCE(u.name, 'Unknown User'),
-			b.facility_id,
-			COALESCE(f.name, 'Unknown Facility'),
-			b.start_time,
-			b.end_time,
-			CASE 
-				WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
-				ELSE b.status::text 
-			END as current_status,
-			COALESCE(b.purpose, '-'),
-			b.created_at,
-			COALESCE(admin.name, '') AS admin_name
-		FROM bookings b
-		JOIN users u ON b.user_id = u.id
-		JOIN facilities f ON b.facility_id = f.id
-		LEFT JOIN users admin ON b.updated_by = admin.id
-		WHERE b.deleted_at IS NULL
-		  AND ($1 = '' 
-		       OR ($1 = 'completed' AND b.status = 'approved' AND b.end_time < NOW())
-		       OR (b.status::text = $1 AND NOT (b.status = 'approved' AND b.end_time < NOW()))
-		      )
-		ORDER BY b.created_at DESC
-	`, statusFilter)
+        SELECT
+            b.id,
+            -- Data User Lengkap (User + Profile)
+            u.id, u.name, u.email,
+            COALESCE(p.full_name, ''),
+            COALESCE(p.phone_number, ''),
+            COALESCE(p.address, ''),
+            COALESCE(p.avatar_url, ''),
+            COALESCE(p.gender, ''),
+            COALESCE(p.identity_number, ''),
+            COALESCE(p.department, ''),
+            COALESCE(p.position, ''),
+            -- Data Fasilitas
+            b.facility_id, COALESCE(f.name, 'Unknown Facility'),
+            -- Data Booking
+            b.start_time, b.end_time,
+            CASE 
+                WHEN b.status = 'approved' AND b.end_time < NOW() THEN 'completed'
+                ELSE b.status::text 
+            END as current_status,
+            COALESCE(b.purpose, '-'),
+            b.created_at,
+            COALESCE(admin.name, '') AS admin_name
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        LEFT JOIN profiles p ON u.id = p.user_id -- JOIN profile ditambahkan
+        JOIN facilities f ON b.facility_id = f.id
+        LEFT JOIN users admin ON b.updated_by = admin.id
+        WHERE b.deleted_at IS NULL
+          AND ($1 = '' 
+               OR ($1 = 'completed' AND b.status = 'approved' AND b.end_time < NOW())
+               OR (b.status::text = $1 AND NOT (b.status = 'approved' AND b.end_time < NOW()))
+              )
+        ORDER BY b.created_at DESC
+    `, statusFilter)
 
 	if err != nil {
 		return nil, err
@@ -211,19 +242,27 @@ func GetAll(db *sql.DB, statusFilter string) ([]BookingResponse, error) {
 		var b BookingResponse
 		if err := rows.Scan(
 			&b.ID,
-			&b.UserID,
-			&b.UserName,
-			&b.FacilityID,
-			&b.FacilityName,
-			&b.StartTime,
-			&b.EndTime,
-			&b.Status,
-			&b.Purpose,
-			&b.CreatedAt,
-			&b.AdminName,
+			// Scan ke struct User -> Profile
+			&b.User.ID, &b.User.Name, &b.User.Email,
+			&b.User.Profile.FullName,
+			&b.User.Profile.PhoneNumber,
+			&b.User.Profile.Address,
+			&b.User.Profile.AvatarURL,
+			&b.User.Profile.Gender,
+			&b.User.Profile.IdentityNumber,
+			&b.User.Profile.Department,
+			&b.User.Profile.Position,
+			// Scan data lainnya
+			&b.FacilityID, &b.FacilityName,
+			&b.StartTime, &b.EndTime, &b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 		); err != nil {
 			return nil, err
 		}
+
+		// Isi field legacy
+		b.UserID = b.User.ID
+		b.UserName = b.User.Name
+
 		bookings = append(bookings, b)
 	}
 
