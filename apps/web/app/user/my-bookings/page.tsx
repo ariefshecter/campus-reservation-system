@@ -11,8 +11,13 @@ import {
   Clock, 
   MapPin, 
   Search, 
-  UserCheck
+  UserCheck,
+  Download
 } from "lucide-react";
+
+// Library untuk Tiket
+import * as QRCode from "qrcode";
+import jsPDF from "jspdf";
 
 import {
   Table,
@@ -29,7 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { cn } from "@/lib/utils";
 
 /* =======================
-   TYPES
+    TYPES
 ======================= */
 type BookingStatus = "pending" | "approved" | "rejected" | "canceled" | "completed";
 
@@ -41,11 +46,22 @@ type Booking = {
   status: BookingStatus;
   purpose: string;
   created_at: string;
-  admin_name?: string; // Field baru untuk nama admin
+  admin_name?: string;
+  ticket_code?: string;
+  is_checked_in?: boolean;
+  is_checked_out?: boolean;
+  // Field User & Profile dari Backend
+  user: {
+    name: string;
+    profile: {
+      full_name: string;
+      identity_number: string;
+    };
+  };
 };
 
 /* =======================
-   HELPER
+    HELPER
 ======================= */
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -66,7 +82,7 @@ const formatTime = (dateString: string) => {
 };
 
 /* =======================
-   COMPONENT
+    COMPONENT
 ======================= */
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -113,7 +129,100 @@ export default function MyBookingsPage() {
     }
   };
 
-  // 3. Filter Logic (Search & Tabs)
+  // 3. Logic Download Tiket PDF (LENGKAP DENGAN NAMA & IDENTITAS)
+const downloadTicket = async (item: Booking) => {
+  if (!item.ticket_code) {
+    toast.error("Kode tiket tidak tersedia");
+    return;
+  }
+
+  // Debugging: Cek data di console browser (F12) jika nama masih kosong
+  console.log("Data Booking:", item);
+
+  try {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a6", 
+    });
+
+    // AMBIL DATA DARI STRUKTUR BACKEND
+    // Backend mengirim: User { Name, Profile { FullName, IdentityNumber } }
+    const buyerName = item.user?.profile?.full_name || item.user?.name || "PEMESAN";
+    const identityNum = item.user?.profile?.identity_number || "TIDAK ADA ID";
+
+    // --- HEADER ---
+    doc.setFillColor(7, 26, 51);
+    doc.rect(0, 0, 105, 25, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("UniSpace Ticket", 52.5, 15, { align: "center" });
+
+    // --- CONTENT ---
+    doc.setTextColor(50, 50, 50);
+    
+    // Nama Pemesan
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("NAMA PEMESAN", 10, 35);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(buyerName.toUpperCase(), 10, 41); // Sedikit turun ke 41 agar rapi
+
+    // Identitas
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("IDENTITAS (NIM/NIP)", 10, 52);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(identityNum, 10, 58);
+
+    // Ruangan
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("RUANGAN", 10, 69);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(item.facility_name.toUpperCase(), 10, 75);
+
+    // Waktu
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("WAKTU PENGGUNAAN", 10, 86);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatDate(item.start_time), 10, 92);
+    doc.text(`${formatTime(item.start_time)} - ${formatTime(item.end_time)} WIB`, 10, 98);
+
+    // Garis Pemisah
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineDashPattern([2, 2], 0);
+    doc.line(5, 105, 100, 105);
+
+    // --- QR CODE ---
+    const qrDataUrl = await QRCode.toDataURL(item.ticket_code, {
+      margin: 1,
+      width: 300,
+      color: { dark: "#071a33" }
+    });
+    doc.addImage(qrDataUrl, "PNG", 32.5, 108, 40, 40);
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont("helvetica", "italic");
+    doc.text(item.ticket_code, 52.5, 145, { align: "center" });
+
+    doc.save(`Tiket_UniSpace_${item.ticket_code}.pdf`);
+    toast.success("Tiket berhasil diunduh");
+  } catch (err) {
+    console.error(err);
+    toast.error("Gagal membuat tiket PDF");
+  }
+};
+
+  // 4. Filter Logic
   const filteredBookings = useMemo(() => {
     return bookings.filter((b) => {
       const matchSearch = 
@@ -126,7 +235,7 @@ export default function MyBookingsPage() {
     });
   }, [bookings, search, statusFilter]);
 
-  // 4. Helper Status Badge dengan Info Admin
+  // 5. Helper Status Badge
   const renderStatus = (item: Booking) => {
     let badge;
     switch (item.status) {
@@ -146,7 +255,6 @@ export default function MyBookingsPage() {
         badge = <Badge className="bg-blue-500 hover:bg-blue-600">Menunggu</Badge>;
     }
 
-    // Jika status Approved/Rejected dan ada nama admin, tampilkan infonya
     if ((item.status === "approved" || item.status === "rejected") && item.admin_name) {
       return (
         <div className="flex flex-col items-start gap-1">
@@ -169,14 +277,11 @@ export default function MyBookingsPage() {
         {/* HEADER */}
         <div>
           <h1 className="text-2xl font-semibold text-slate-100">Booking Saya</h1>
-          <p className="text-slate-400">
-            Kelola jadwal dan riwayat peminjaman ruangan Anda.
-          </p>
+          <p className="text-slate-400">Kelola jadwal dan riwayat peminjaman ruangan Anda.</p>
         </div>
 
         {/* FILTERS TOOLBAR */}
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Search Input */}
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
             <Input
@@ -187,7 +292,6 @@ export default function MyBookingsPage() {
             />
           </div>
 
-          {/* Status Tabs */}
           <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
              {(["all", "pending", "approved", "completed", "rejected", "canceled"] as const).map((status) => (
                 <Button
@@ -198,8 +302,8 @@ export default function MyBookingsPage() {
                   className={cn(
                     "capitalize border-slate-700",
                     statusFilter === status 
-                      ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-600" 
-                      : "bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+                      ? "bg-blue-600 text-white border-blue-600" 
+                      : "bg-transparent text-slate-300 hover:bg-slate-800"
                   )}
                 >
                   {status === "all" ? "Semua" : status}
@@ -219,8 +323,7 @@ export default function MyBookingsPage() {
           <CardContent>
             {loading ? (
               <div className="flex h-40 items-center justify-center text-slate-400">
-                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                Memuat data...
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Memuat data...
               </div>
             ) : filteredBookings.length === 0 ? (
               <div className="flex h-60 flex-col items-center justify-center space-y-4 text-slate-400 border border-dashed border-slate-700 rounded-xl bg-slate-800/20">
@@ -242,7 +345,6 @@ export default function MyBookingsPage() {
                   {filteredBookings.map((item) => (
                     <TableRow key={item.id} className="border-slate-800 hover:bg-slate-800/50 transition-colors">
                       
-                      {/* FASILITAS */}
                       <TableCell className="font-medium text-slate-200">
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-slate-400" />
@@ -253,7 +355,6 @@ export default function MyBookingsPage() {
                         </div>
                       </TableCell>
 
-                      {/* JADWAL */}
                       <TableCell>
                         <div className="flex flex-col text-sm space-y-1">
                           <div className="flex items-center gap-2 font-medium text-slate-300">
@@ -267,37 +368,48 @@ export default function MyBookingsPage() {
                         </div>
                       </TableCell>
 
-                      {/* KEPERLUAN */}
                       <TableCell className="max-w-[200px] truncate text-slate-400" title={item.purpose}>
                         {item.purpose}
                       </TableCell>
 
-                      {/* STATUS (Dengan Admin Name) */}
                       <TableCell>{renderStatus(item)}</TableCell>
 
-                      {/* AKSI */}
                       <TableCell className="text-right">
-                        {item.status === "pending" ? (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={cancelingId === item.id}
-                            onClick={() => handleCancel(item.id)}
-                            className="bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20"
-                          >
-                            {cancelingId === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Trash2 className="mr-1 h-3 w-3" /> Batal
-                              </>
-                            )}
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-slate-600 italic">
-                             -
-                          </span>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          {/* Tombol Tiket (Hanya untuk Approved) */}
+                          {item.status === "approved" && item.ticket_code && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadTicket(item)}
+                              className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
+                            >
+                              <Download className="mr-1 h-3 w-3" /> Tiket
+                            </Button>
+                          )}
+
+                          {/* Tombol Batal (Hanya untuk Pending) */}
+                          {item.status === "pending" && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={cancelingId === item.id}
+                              onClick={() => handleCancel(item.id)}
+                              className="bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                            >
+                              {cancelingId === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <><Trash2 className="mr-1 h-3 w-3" /> Batal</>
+                              )}
+                            </Button>
+                          )}
+
+                          {/* Info jika sudah Check-out */}
+                          {item.is_checked_out && (
+                            <span className="text-xs text-slate-500 italic py-1 px-2">Selesai</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -24,6 +24,11 @@ type UpdateStatusRequest struct {
 	Status string `json:"status"`
 }
 
+// Request untuk Scan QR (Digunakan untuk In dan Out)
+type CheckInRequest struct {
+	TicketCode string `json:"ticket_code"`
+}
+
 // ========================================================
 // HANDLER: CREATE BOOKING (USER)
 // ========================================================
@@ -39,9 +44,6 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// ===============================
-		// PARSE TIME AS WIB
-		// ===============================
 		loc, err := time.LoadLocation("Asia/Jakarta")
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{
@@ -50,7 +52,6 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 		}
 
 		layout := "2006-01-02T15:04:05"
-
 		start, err1 := time.ParseInLocation(layout, req.StartTime, loc)
 		end, err2 := time.ParseInLocation(layout, req.EndTime, loc)
 
@@ -66,9 +67,6 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// ===============================
-		// VALIDASI JAM OPERASIONAL (WIB)
-		// ===============================
 		startHour := start.Hour()
 		endHour := end.Hour()
 
@@ -78,9 +76,6 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// ===============================
-		// CREATE BOOKING
-		// ===============================
 		newBooking := Booking{
 			ID:         uuid.New().String(),
 			UserID:     userID,
@@ -105,7 +100,65 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 }
 
 // ========================================================
-// HANDLER LAIN TETAP (TIDAK DIUBAH)
+// HANDLER: SCAN TICKET (ADMIN SCANNER - IN & OUT)
+// ========================================================
+
+func CheckInHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req CheckInRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Format scan tidak valid",
+			})
+		}
+
+		if req.TicketCode == "" {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Kode tiket kosong",
+			})
+		}
+
+		// Jalankan logika Service
+		err := CheckInTicket(db, req.TicketCode)
+
+		if err != nil {
+			msg := err.Error()
+
+			// Jika sukses Check-out tapi Telat, Service melempar error string khusus
+			if strings.Contains(msg, "Check-Out Berhasil!") {
+				return c.Status(200).JSON(fiber.Map{
+					"message": msg,
+					"type":    "checkout_late",
+				})
+			}
+
+			// Error validasi sungguhan
+			return c.Status(400).JSON(fiber.Map{
+				"error": msg,
+			})
+		}
+
+		// Karena Service mengembalikan nil jika sukses tepat waktu,
+		// Kita perlu cek status terakhir untuk menentukan pesan sukses.
+		booking, _ := FindByTicketCode(db, req.TicketCode)
+
+		message := "Check-In Berhasil! Silakan masuk ke ruangan."
+		respType := "checkin"
+
+		if booking.IsCheckedOut {
+			message = "Check-Out Berhasil! Terima kasih telah menggunakan fasilitas."
+			respType = "checkout_on_time"
+		}
+
+		return c.JSON(fiber.Map{
+			"message": message,
+			"type":    respType,
+		})
+	}
+}
+
+// ========================================================
+// HANDLER LAIN TETAP
 // ========================================================
 
 func MyBookingsHandler(db *sql.DB) fiber.Handler {
@@ -187,19 +240,13 @@ func CancelHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// ========================================================
-// ERROR MAPPING
-// ========================================================
-
 func mapBookingError(err error) (int, string) {
 	msg := err.Error()
 
-	// 1. Cek error detail dari Service (Ruangan bentrok)
 	if strings.Contains(msg, "Ruangan sudah dibooking pada") {
-		return 409, msg // 409 Conflict: Mengirim pesan asli yg ada jamnya
+		return 409, msg
 	}
 
-	// 2. Cek error constraints dari Database (Fallback)
 	switch {
 	case strings.Contains(msg, "no_double_booking"):
 		return 409, "Ruangan sudah dibooking pada waktu tersebut"
@@ -208,6 +255,5 @@ func mapBookingError(err error) (int, string) {
 		return 409, "Anda sudah memiliki booking lain di waktu yang sama"
 	}
 
-	// Default Bad Request
 	return 400, msg
 }
