@@ -9,7 +9,8 @@ import { AxiosError } from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2 } from "lucide-react"
+// Import ikon Eye dan EyeOff
+import { Loader2, Eye, EyeOff } from "lucide-react"
 import api from "@/lib/axios"
 
 interface ApiErrorResponse {
@@ -23,6 +24,9 @@ function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("") 
   
+  // State untuk toggle password visibility
+  const [showPassword, setShowPassword] = useState(false)
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -79,11 +83,7 @@ function LoginContent() {
       {/* HEADER LOGO */}
       <div className="flex flex-col items-center text-center">
         
-        {/* PERBAIKAN CONTAINER LOGO LOGIN:
-            1. Mengunci ukuran menjadi kotak h-32 w-32 (128px).
-            2. Menggunakan 'fill' agar gambar menyesuaikan kotak tersebut.
-            3. 'mb-6' memberi jarak ke teks.
-        */}
+        {/* CONTAINER LOGO */}
         <div className="relative mb-6 h-32 w-32 shrink-0">
           <Image 
             src="/logo.png" 
@@ -128,16 +128,34 @@ function LoginContent() {
           
           <div className="space-y-2">
             <Label htmlFor="password" className="text-slate-200">Password</Label>
-            <Input 
-              id="password" 
-              name="password" 
-              type="password" 
-              placeholder="••••••••"
-              required 
-              className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
-              value={formData.password}
-              onChange={handleChange}
-            />
+            <div className="relative">
+              <Input 
+                id="password" 
+                name="password" 
+                // Toggle tipe input antara text dan password
+                type={showPassword ? "text" : "password"} 
+                placeholder="••••••••"
+                required 
+                // Tambahkan pr-10 agar teks tidak tertutup ikon
+                className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500 pr-10"
+                value={formData.password}
+                onChange={handleChange}
+              />
+              
+              {/* Tombol Toggle Icon */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                tabIndex={-1} // Agar tidak bisa difokus dengan tab (opsional)
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-6" disabled={loading}>

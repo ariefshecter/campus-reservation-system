@@ -9,12 +9,16 @@ import { AxiosError } from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, ArrowLeft } from "lucide-react"
+// Import ikon Eye dan EyeOff
+import { Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import api from "@/lib/axios"
 
 export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  
+  // State untuk toggle password visibility
+  const [showPassword, setShowPassword] = useState(false)
   
   const [formData, setFormData] = useState({
     name: "",
@@ -52,9 +56,7 @@ export default function RegisterPage() {
       {/* HEADER LOGO */}
       <div className="flex flex-col items-center text-center">
         
-        {/* PERBAIKAN CONTAINER LOGO REGISTER:
-            Sama dengan login, dikunci di h-32 w-32 agar rapi.
-        */}
+        {/* CONTAINER LOGO */}
         <div className="relative mb-6 h-32 w-32 shrink-0">
           <Image 
             src="/logo.png" 
@@ -78,7 +80,7 @@ export default function RegisterPage() {
         <form onSubmit={handleRegister} className="space-y-5">
           
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-slate-200">Nama Lengkap</Label>
+            <Label htmlFor="name" className="text-slate-200">Username</Label>
             <Input 
               id="name" 
               name="name" 
@@ -107,16 +109,35 @@ export default function RegisterPage() {
           
           <div className="space-y-2">
             <Label htmlFor="password" className="text-slate-200">Password</Label>
-            <Input 
-              id="password" 
-              name="password" 
-              type="password" 
-              placeholder="Minimal 6 karakter"
-              required 
-              className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
-              value={formData.password}
-              onChange={handleChange}
-            />
+            <div className="relative">
+              <Input 
+                id="password" 
+                name="password" 
+                // Toggle tipe input
+                type={showPassword ? "text" : "password"} 
+                placeholder="Minimal 6 karakter"
+                required 
+                // Tambahkan padding kanan agar teks tidak tertutup ikon
+                className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-blue-500 pr-10"
+                value={formData.password}
+                onChange={handleChange}
+              />
+              
+              {/* Tombol Toggle Icon */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            
             <p className="text-xs text-slate-500">
               Gunakan password yang kuat agar akun Anda aman.
             </p>

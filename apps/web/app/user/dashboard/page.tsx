@@ -35,7 +35,7 @@ type Facility = {
   capacity: number;
   location: string;
   photo_url: string[];
-  is_active: boolean; // UPDATE: Menambahkan status aktif
+  is_active: boolean;
 };
 
 type Booking = {
@@ -64,7 +64,6 @@ function FacilityCard({
 }) {
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
-  // Pastikan photos adalah array. Jika null/undefined, jadikan array kosong.
   const photos = Array.isArray(facility.photo_url) && facility.photo_url.length > 0
     ? facility.photo_url
     : [];
@@ -73,7 +72,7 @@ function FacilityCard({
   const currentSrc = photos.length > 0 ? photos[currentImgIndex] : "";
 
   const nextImage = (e: React.MouseEvent) => {
-    e.preventDefault(); // Mencegah link detail terklik
+    e.preventDefault();
     e.stopPropagation();
     setCurrentImgIndex((prev) => (prev + 1) % photos.length);
   };
@@ -86,7 +85,6 @@ function FacilityCard({
 
   return (
     <Card className="relative overflow-hidden rounded-2xl bg-slate-100 shadow flex flex-col h-full group/card hover:shadow-lg transition-all duration-300">
-      {/* --- THUMBNAIL SLIDER --- */}
       <div className="relative h-44 group bg-slate-200 overflow-hidden">
         {currentSrc ? (
           <Image
@@ -108,10 +106,8 @@ function FacilityCard({
           {facility.capacity} Org
         </Badge>
 
-        {/* Slider Controls (Hanya jika > 1 foto) */}
         {hasMultiplePhotos && (
           <>
-            {/* Left Button */}
             <button 
               onClick={prevImage}
               className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-10"
@@ -119,7 +115,6 @@ function FacilityCard({
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            {/* Right Button */}
             <button 
               onClick={nextImage}
               className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-10"
@@ -127,7 +122,6 @@ function FacilityCard({
               <ChevronRight className="h-4 w-4" />
             </button>
 
-            {/* Dots Indicator */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {photos.map((_, idx) => (
                 <div 
@@ -152,15 +146,13 @@ function FacilityCard({
           </p>
         </div>
 
-        {/* --- ACTION BUTTONS (Updated) --- */}
         <div className="grid grid-cols-2 gap-3">
           <Link href={`/user/facilities/${facility.id}`} className="w-full" tabIndex={-1}>
              <Button variant="outline" className="w-full border-slate-300 text-slate-700 hover:bg-slate-200">
-                Detail
+               Detail
              </Button>
           </Link>
           
-          {/* UPDATE: Tombol Booking dengan logika status */}
           <Button
             className={`w-full ${
               facility.is_active 
@@ -186,6 +178,9 @@ export default function UserDashboardPage() {
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [search, setSearch] = useState("");
+  
+  // PERBAIKAN 1: Tambahkan state loading
+  const [isLoading, setIsLoading] = useState(true);
 
   // booking modal
   const [openBooking, setOpenBooking] = useState(false);
@@ -207,7 +202,6 @@ export default function UserDashboardPage() {
 
         setProfile(profileRes.data);
         
-        // Pastikan photo_url di-map sebagai array jika backend mengirim null
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const safeFacilities = (facilityRes.data ?? []).map((f: any) => ({
           ...f,
@@ -218,6 +212,9 @@ export default function UserDashboardPage() {
         setBookings(bookingRes.data ?? []);
       } catch (error) {
         console.error("Gagal memuat dashboard:", error);
+      } finally {
+        // PERBAIKAN 1: Set loading false setelah fetch selesai (sukses/gagal)
+        setIsLoading(false);
       }
     })();
   }, []);
@@ -233,8 +230,16 @@ export default function UserDashboardPage() {
   /* =======================
       DERIVED STATE
   ======================= */
-  const isProfileIncomplete =
-    !profile?.phone_number || !profile?.identity_number;
+  // PERBAIKAN 2: Logika pengecekan profil
+  // - Cek !isLoading agar tidak muncul saat awal load
+  // - Cek keberadaan `profile` object
+  // - Gunakan .trim() untuk memastikan string kosong atau spasi dianggap tidak lengkap
+  const isProfileIncomplete = !isLoading && profile && (
+    !profile.phone_number || 
+    profile.phone_number.toString().trim() === "" ||
+    !profile.identity_number || 
+    profile.identity_number.toString().trim() === ""
+  );
 
   const filteredFacilities = useMemo(() => {
     const q = search.toLowerCase();

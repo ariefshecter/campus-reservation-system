@@ -16,7 +16,9 @@ import {
   Fingerprint,
   Users, 
   Building2, 
-  UserCog
+  UserCog,
+  Eye,      // Ikon Mata (Show)
+  EyeOff    // Ikon Mata Coret (Hide)
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -68,6 +70,11 @@ export default function UserProfilePage() {
     new_password: "",
     confirm_password: "",
   });
+
+  // State untuk Toggle Password Visibility
+  const [showOldPass, setShowOldPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -457,43 +464,75 @@ export default function UserProfilePage() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleChangePassword} className="space-y-5">
+                  
+                  {/* Password Lama */}
                   <div className="space-y-2">
                     <Label className="text-slate-300">Password Saat Ini</Label>
                     <div className="relative">
                         <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
                         <Input 
-                          type="password" 
+                          type={showOldPass ? "text" : "password"}
                           placeholder="Masukkan password lama"
-                          className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                          className="pl-9 pr-10 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
                           value={passData.old_password}
                           onChange={(e) => setPassData({...passData, old_password: e.target.value})}
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowOldPass(!showOldPass)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showOldPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                     </div>
                   </div>
 
                   <div className="h-[1px] bg-white/10 my-2" />
 
                   <div className="grid md:grid-cols-2 gap-4">
+                    {/* Password Baru */}
                     <div className="space-y-2">
                       <Label className="text-slate-300">Password Baru</Label>
-                      <Input 
-                        type="password" 
-                        placeholder="Minimal 6 karakter"
-                        className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
-                        value={passData.new_password}
-                        onChange={(e) => setPassData({...passData, new_password: e.target.value})}
-                      />
+                      <div className="relative">
+                        <Input 
+                          type={showNewPass ? "text" : "password"}
+                          placeholder="Minimal 6 karakter"
+                          className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600 pr-10"
+                          value={passData.new_password}
+                          onChange={(e) => setPassData({...passData, new_password: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
 
+                    {/* Konfirmasi Password */}
                     <div className="space-y-2">
                       <Label className="text-slate-300">Konfirmasi Password</Label>
-                      <Input 
-                        type="password" 
-                        placeholder="Ulangi password baru"
-                        className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
-                        value={passData.confirm_password}
-                        onChange={(e) => setPassData({...passData, confirm_password: e.target.value})}
-                      />
+                      <div className="relative">
+                        <Input 
+                          type={showConfirmPass ? "text" : "password"}
+                          placeholder="Ulangi password baru"
+                          className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600 pr-10"
+                          value={passData.confirm_password}
+                          onChange={(e) => setPassData({...passData, confirm_password: e.target.value})}
+                        />
+                         <button
+                          type="button"
+                          onClick={() => setShowConfirmPass(!showConfirmPass)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
