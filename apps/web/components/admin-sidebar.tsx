@@ -3,10 +3,11 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Building2, CalendarCheck, LogOut, Users } from "lucide-react"
+import { LayoutDashboard, Building2, CalendarCheck, LogOut, Users, QrCode } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "../hooks/use-auth" // Sesuaikan path jika perlu (misal "@/hooks/use-auth")
+
 
 const menuItems = [
   {
@@ -28,6 +29,11 @@ const menuItems = [
     title: "Approval Booking",
     href: "/admin/bookings",
     icon: CalendarCheck,
+  },
+  {
+    title: "Scanner Tiket",
+    href: "/admin/scanner",
+    icon: QrCode,
   },
 ]
 

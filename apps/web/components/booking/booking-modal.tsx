@@ -36,7 +36,7 @@ export default function BookingModal({
   const [loading, setLoading] = useState(false);
 
   const isTimeInRange = (time: string) =>
-    time >= "08:00" && time <= "16:00";
+    time >= "00:00" && time <= "23:59";
 
   const isFormValid = useMemo(() => {
     if (!date || !startTime || !endTime) return false;
@@ -113,16 +113,16 @@ export default function BookingModal({
           <div className="grid grid-cols-2 gap-3">
             <Input
               type="time"
-              min="08:00"
-              max="16:00"
+              min="00:00"
+              max="23:59"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               className="bg-white border-slate-300 text-slate-900 focus-visible:ring-slate-400"
             />
             <Input
               type="time"
-              min="08:00"
-              max="16:00"
+              min="00:00"
+              max="23:59"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               className="bg-white border-slate-300 text-slate-900 focus-visible:ring-slate-400"
@@ -139,7 +139,7 @@ export default function BookingModal({
 
           {!isFormValid && (
             <p className="text-sm text-red-500/80">
-              Jam booking harus 08.00–16.00 dan jam selesai
+              Jam booking harus 00.00–23.59 dan jam selesai
               lebih besar dari jam mulai
             </p>
           )}

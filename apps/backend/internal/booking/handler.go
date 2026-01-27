@@ -70,9 +70,9 @@ func CreateHandler(db *sql.DB) fiber.Handler {
 		startHour := start.Hour()
 		endHour := end.Hour()
 
-		if startHour < 8 || endHour > 16 {
+		if startHour < 0 || endHour > 23 {
 			return c.Status(400).JSON(fiber.Map{
-				"error": "Booking hanya diperbolehkan antara jam 08.00 - 16.00",
+				"error": "Booking hanya diperbolehkan antara jam 00.00 - 23.59",
 			})
 		}
 
