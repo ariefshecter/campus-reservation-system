@@ -15,10 +15,6 @@ import {
   Download
 } from "lucide-react";
 
-// Library untuk Tiket
-import * as QRCode from "qrcode";
-import jsPDF from "jspdf";
-
 import {
   Table,
   TableBody,
@@ -34,7 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { cn } from "@/lib/utils";
 
 /* =======================
-    TYPES
+   TYPES
 ======================= */
 type BookingStatus = "pending" | "approved" | "rejected" | "canceled" | "completed";
 
@@ -61,7 +57,7 @@ type Booking = {
 };
 
 /* =======================
-    HELPER
+   HELPER
 ======================= */
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -82,12 +78,13 @@ const formatTime = (dateString: string) => {
 };
 
 /* =======================
-    COMPONENT
+   COMPONENT
 ======================= */
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null); // State untuk loading download
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -129,98 +126,45 @@ export default function MyBookingsPage() {
     }
   };
 
-  // 3. Logic Download Tiket PDF (LENGKAP DENGAN NAMA & IDENTITAS)
-const downloadTicket = async (item: Booking) => {
-  if (!item.ticket_code) {
-    toast.error("Kode tiket tidak tersedia");
-    return;
-  }
+  // 3. Logic Download Tiket GAMBAR (PNG) dari Backend
+  const downloadTicket = async (item: Booking) => {
+    if (!item.ticket_code) {
+      toast.error("Kode tiket tidak tersedia");
+      return;
+    }
 
-  // Debugging: Cek data di console browser (F12) jika nama masih kosong
-  console.log("Data Booking:", item);
+    try {
+      setDownloadingId(item.id); // Set loading state
 
-  try {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a6", 
-    });
+      // Request Blob Image dari Backend (Protected Route)
+      const response = await api.get(`/bookings/${item.id}/ticket`, {
+        responseType: 'blob' 
+      });
 
-    // AMBIL DATA DARI STRUKTUR BACKEND
-    // Backend mengirim: User { Name, Profile { FullName, IdentityNumber } }
-    const buyerName = item.user?.profile?.full_name || item.user?.name || "PEMESAN";
-    const identityNum = item.user?.profile?.identity_number || "TIDAK ADA ID";
+      // Buat URL dari Blob
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Trigger Download via elemen <a> virtual
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Tiket_UniSpace_${item.ticket_code}.png`);
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("E-Ticket berhasil diunduh!");
 
-    // --- HEADER ---
-    doc.setFillColor(7, 26, 51);
-    doc.rect(0, 0, 105, 25, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("UniSpace Ticket", 52.5, 15, { align: "center" });
-
-    // --- CONTENT ---
-    doc.setTextColor(50, 50, 50);
-    
-    // Nama Pemesan
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("NAMA PEMESAN", 10, 35);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(buyerName.toUpperCase(), 10, 41); // Sedikit turun ke 41 agar rapi
-
-    // Identitas
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("IDENTITAS (NIM/NIP)", 10, 52);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(identityNum, 10, 58);
-
-    // Ruangan
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("RUANGAN", 10, 69);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(item.facility_name.toUpperCase(), 10, 75);
-
-    // Waktu
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("WAKTU PENGGUNAAN", 10, 86);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(formatDate(item.start_time), 10, 92);
-    doc.text(`${formatTime(item.start_time)} - ${formatTime(item.end_time)} WIB`, 10, 98);
-
-    // Garis Pemisah
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineDashPattern([2, 2], 0);
-    doc.line(5, 105, 100, 105);
-
-    // --- QR CODE ---
-    const qrDataUrl = await QRCode.toDataURL(item.ticket_code, {
-      margin: 1,
-      width: 300,
-      color: { dark: "#071a33" }
-    });
-    doc.addImage(qrDataUrl, "PNG", 32.5, 108, 40, 40);
-
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "italic");
-    doc.text(item.ticket_code, 52.5, 145, { align: "center" });
-
-    doc.save(`Tiket_UniSpace_${item.ticket_code}.pdf`);
-    toast.success("Tiket berhasil diunduh");
-  } catch (err) {
-    console.error(err);
-    toast.error("Gagal membuat tiket PDF");
-  }
-};
+    } catch (error) {
+      console.error("Gagal download tiket:", error);
+      toast.error("Gagal mengunduh tiket gambar. Silakan coba lagi.");
+    } finally {
+      setDownloadingId(null); // Reset loading state
+    }
+  };
 
   // 4. Filter Logic
   const filteredBookings = useMemo(() => {
@@ -376,15 +320,21 @@ const downloadTicket = async (item: Booking) => {
 
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {/* Tombol Tiket (Hanya untuk Approved) */}
-                          {item.status === "approved" && item.ticket_code && (
+                          {/* Tombol Tiket (Hanya untuk Approved/Completed) */}
+                          {(item.status === "approved" || item.status === "completed") && item.ticket_code && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => downloadTicket(item)}
+                              disabled={downloadingId === item.id} // Disable saat loading
                               className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
                             >
-                              <Download className="mr-1 h-3 w-3" /> Tiket
+                              {downloadingId === item.id ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Download className="mr-1 h-3 w-3" />
+                              )}
+                              Tiket
                             </Button>
                           )}
 

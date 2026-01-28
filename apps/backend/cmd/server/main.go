@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time" // <--- Import time ditambahkan untuk Ticker
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -106,7 +107,7 @@ func main() {
 	app.Patch("/facilities/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), facility.ToggleStatusHandler(db))
 	app.Delete("/facilities/:id", auth.JWTProtected(), auth.RequireRole("admin"), facility.DeleteHandler(db))
 	app.Get("/facilities", auth.JWTProtected(), facility.ListHandler(db))
-	app.Get("/facilities/:id", auth.JWTProtected(), facility.GetOneHandler(db)) // <--- TAMBAHKAN INI
+	app.Get("/facilities/:id", auth.JWTProtected(), facility.GetOneHandler(db))
 
 	// ==========================
 	// 7. BOOKING ROUTES
@@ -114,9 +115,14 @@ func main() {
 	app.Post("/bookings", auth.JWTProtected(), auth.RequireRole("user"), booking.CreateHandler(db))
 	app.Get("/bookings/me", auth.JWTProtected(), auth.RequireRole("user"), booking.MyBookingsHandler(db))
 	app.Delete("/bookings/:id", auth.JWTProtected(), auth.RequireRole("user"), booking.CancelHandler(db))
+	app.Get("/bookings/:id/ticket", auth.JWTProtected(), booking.DownloadTicketHandler(db))
+	app.Get("/facilities/:id/schedule", auth.JWTProtected(), booking.GetFacilityScheduleHandler(db))
+	app.Get("/bookings/me", auth.JWTProtected(), auth.RequireRole("user"), booking.MyBookingsHandler(db))
 	app.Get("/bookings", auth.JWTProtected(), auth.RequireRole("admin"), booking.ListAllHandler(db))
 	app.Patch("/bookings/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), booking.UpdateStatusHandler(db))
 	app.Post("/bookings/verify-ticket", auth.JWTProtected(), auth.RequireRole("admin"), booking.CheckInHandler(db))
+	app.Get("/admin/attendance", auth.JWTProtected(), auth.RequireRole("admin"), booking.GetAttendanceLogsHandler(db))
+	app.Get("/admin/attendance/export", auth.JWTProtected(), auth.RequireRole("admin"), booking.ExportAttendanceHandler(db))
 	// ==========================
 	// 8. USER ROUTES (ADMIN)
 	// ==========================
@@ -137,6 +143,23 @@ func main() {
 
 	// Upload Avatar
 	app.Post("/profile/avatar", auth.JWTProtected(), profile.UploadAvatarHandler)
+
+	// ==========================
+	// 11. WORKER: AUTO CHECK-OUT
+	// ==========================
+	// Menjalankan pengecekan otomatis setiap 1 menit di background
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		log.Println("Worker Auto-Checkout Started...")
+
+		for range ticker.C {
+			if err := booking.RunAutoCheckout(db); err != nil {
+				log.Printf("Error running auto checkout: %v\n", err)
+			}
+		}
+	}()
 
 	// ==========================
 	// RUN SERVER

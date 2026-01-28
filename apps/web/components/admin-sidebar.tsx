@@ -1,13 +1,20 @@
-"use client"
+"use client";
 
-import { useEffect } from "react"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Building2, CalendarCheck, LogOut, Users, QrCode } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { useAuth } from "../hooks/use-auth" // Sesuaikan path jika perlu (misal "@/hooks/use-auth")
-
+import { useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { 
+  LayoutDashboard, 
+  Building2, 
+  CalendarCheck, 
+  LogOut, 
+  Users, 
+  QrCode,
+  ClipboardList // <--- Icon baru untuk Log Kehadiran
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "../hooks/use-auth"; 
 
 const menuItems = [
   {
@@ -31,26 +38,30 @@ const menuItems = [
     icon: CalendarCheck,
   },
   {
+    title: "Log Kehadiran", // <--- Menu Baru
+    href: "/admin/attendance",
+    icon: ClipboardList,
+  },
+  {
     title: "Scanner Tiket",
     href: "/admin/scanner",
     icon: QrCode,
   },
-]
+];
 
 export function AdminSidebar() {
-  const pathname = usePathname()
-  const { logout, user, fetchUser } = useAuth() 
-  const router = useRouter()
+  const pathname = usePathname();
+  const { logout, user, fetchUser } = useAuth();
+  const router = useRouter();
 
-  // PERBAIKAN: Tambahkan [fetchUser] ke dalam dependency array
   useEffect(() => {
-    fetchUser()
-  }, [fetchUser]) 
+    fetchUser();
+  }, [fetchUser]);
 
   const handleLogout = () => {
-    logout()
-    router.push("/login")
-  }
+    logout();
+    router.push("/login");
+  };
 
   return (
     <div className="flex h-screen w-64 flex-col justify-between border-r bg-slate-900 text-white fixed left-0 top-0 overflow-y-auto">
@@ -60,8 +71,8 @@ export function AdminSidebar() {
         
         <nav className="space-y-2">
           {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = pathname === item.href
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
             
             return (
               <Link
@@ -77,7 +88,7 @@ export function AdminSidebar() {
                 <Icon className="h-5 w-5" />
                 {item.title}
               </Link>
-            )
+            );
           })}
         </nav>
       </div>
@@ -113,5 +124,5 @@ export function AdminSidebar() {
         </Button>
       </div>
     </div>
-  )
+  );
 }

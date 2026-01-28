@@ -1,12 +1,20 @@
 package booking
 
 import (
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"math/big"
+	"strings"
 	"time"
+
+	"github.com/fogleman/gg"
+	"github.com/skip2/go-qrcode"
+	"github.com/xuri/excelize/v2"
 )
 
 // generateTicketCode menghasilkan kode unik seperti: TK-20260126-A1B2C
@@ -37,6 +45,9 @@ func CreateBooking(db *sql.DB, b Booking) error {
 		return errors.New("waktu mulai harus sebelum waktu selesai")
 	}
 
+	// Menambahkan batas akhir otomatis +10 menit dari input user sesuai kesepakatan
+	b.EndTime = b.EndTime.Add(10 * time.Minute)
+
 	// 1. CEK BENTROK
 	conflictStart, conflictEnd, err := GetConflictingBooking(db, b.FacilityID, b.StartTime, b.EndTime)
 	if err != nil {
@@ -44,10 +55,8 @@ func CreateBooking(db *sql.DB, b Booking) error {
 	}
 
 	if conflictStart != nil {
-		loc, err := time.LoadLocation("Asia/Jakarta")
-		if err != nil {
-			loc = time.Local
-		}
+		// Fix Timezone untuk Error Message
+		loc, _ := time.LoadLocation("Asia/Jakarta")
 		tStart := conflictStart.In(loc).Format("02 Jan 2006, 15:04")
 		tEnd := conflictEnd.In(loc).Format("15:04")
 
@@ -129,40 +138,68 @@ func CheckInTicket(db *sql.DB, ticketCode string) error {
 		return errors.New("tiket tidak valid karena booking belum disetujui")
 	}
 
+	// [FIX TIMEZONE] Load lokasi WIB untuk validasi waktu
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.Local // Fallback jika timezone server bermasalah
+	}
+
+	now := time.Now().In(loc)
+	startTimeWIB := booking.StartTime.In(loc)
+	endTimeWIB := booking.EndTime.In(loc)
+
 	// ==========================================
 	// ALUR CHECK-OUT (Jika sudah pernah Check-in)
 	// ==========================================
 	if booking.IsCheckedIn {
-		// Validasi: Jika sudah pernah check-out sebelumnya
 		if booking.IsCheckedOut {
 			return errors.New("tiket ini sudah selesai digunakan (Sudah Check-Out)")
 		}
 
-		// Hitung Status Keterlambatan
-		now := time.Now()
-		gracePeriod := 15 * time.Minute
-		deadline := booking.EndTime.Add(gracePeriod)
+		// Menghitung jadwal asli (mengurangi kembali buffer 10 menit)
+		originalScheduleEnd := endTimeWIB.Add(-10 * time.Minute)
 
-		checkoutStatus := "on_time"
+		// Toleransi keterlambatan adalah 5 menit dari jadwal asli
+		gracePeriod := 5 * time.Minute
+		deadline := originalScheduleEnd.Add(gracePeriod)
+
+		attendanceStatus := "on_time"
 		if now.After(deadline) {
-			checkoutStatus = "late"
+			attendanceStatus = "late"
 		}
 
-		// Update data Check-out di database
-		if err := UpdateCheckOut(db, booking.ID, checkoutStatus); err != nil {
+		// Memperbarui data Check-out di database dengan status kehadiran yang sesuai
+		if err := UpdateCheckOut(db, booking.ID, attendanceStatus); err != nil {
 			return errors.New("gagal memproses check-out")
 		}
 
-		if checkoutStatus == "late" {
-			return fmt.Errorf("Check-Out Berhasil! (Terlambat: melewati batas toleransi 15 menit)")
+		if attendanceStatus == "late" {
+			return fmt.Errorf("Check-Out Berhasil! (Terlambat: melewati batas toleransi 5 menit)")
 		}
-		return nil // Berhasil Tepat Waktu
+		return nil
 	}
 
 	// ==========================================
 	// ALUR CHECK-IN (Jika belum pernah Check-in)
 	// ==========================================
+
+	// Validasi rentang waktu: Check-in diperbolehkan sejak StartTime hingga EndTime (+10m buffer)
+	if now.Before(startTimeWIB) {
+		return fmt.Errorf("Check-in gagal. Booking Anda baru dimulai jam %s WIB", startTimeWIB.Format("15:04"))
+	}
+	if now.After(endTimeWIB) {
+		return errors.New("Check-in gagal. Waktu booking Anda telah berakhir (Mangkir)")
+	}
+
 	return UpdateCheckIn(db, booking.ID)
+}
+
+// ==========================================
+// WORKER: AUTO CHECK-OUT (Sistem)
+// ==========================================
+func RunAutoCheckout(db *sql.DB) error {
+	// Memanggil fungsi repository yang sebenarnya
+	return ProcessExpiredBookings(db)
 }
 
 // ==========================
@@ -170,4 +207,234 @@ func CheckInTicket(db *sql.DB, ticketCode string) error {
 // ==========================
 func GetUserBookings(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return FindByUserID(db, userID)
+}
+
+// ==========================
+// TICKET GENERATOR (IMAGE)
+// ==========================
+
+func GenerateTicketImage(b BookingResponse) ([]byte, error) {
+	// 1. Setup Kanvas (Ukuran Portrait: 600x1000 pixel)
+	const W = 600
+	const H = 1000
+	dc := gg.NewContext(W, H)
+
+	// Warna Background Putih
+	dc.SetRGB(1, 1, 1)
+	dc.Clear()
+
+	// 2. Load Font
+	fontPath := "assets/fonts/Arial.ttf"
+
+	setFont := func(size float64) {
+		if err := dc.LoadFontFace(fontPath, size); err != nil {
+			fmt.Println("Warning: Font not found, text might fail to render.", err)
+		}
+	}
+
+	// 3. Header: "UniSpace Ticket"
+	dc.SetRGB(0, 0, 0) // Hitam
+	setFont(40)
+	dc.DrawStringAnchored("UniSpace Ticket", W/2, 80, 0.5, 0.5)
+
+	// Garis Pemisah Header
+	dc.SetLineWidth(2)
+	dc.SetRGB(0.8, 0.8, 0.8) // Abu-abu muda
+	dc.DrawLine(50, 130, W-50, 130)
+	dc.Stroke()
+
+	// 4. Isi Tiket (Nama, Identitas, Ruangan, Waktu)
+	startY := 200.0
+	gapY := 90.0
+
+	fields := []struct {
+		Label string
+		Value string
+	}{
+		{"NAMA PEMESAN", strings.ToUpper(b.UserName)},
+		{"IDENTITAS (NIM/NIP)", b.User.Profile.IdentityNumber},
+		{"RUANGAN", strings.ToUpper(b.FacilityName)},
+		{"WAKTU PENGGUNAAN", formatDateIndo(b.StartTime, b.EndTime)}, // <--- Ini yang diperbaiki
+	}
+
+	for i, f := range fields {
+		yPos := startY + (float64(i) * gapY)
+
+		dc.SetRGB(0.5, 0.5, 0.5)
+		setFont(14)
+		dc.DrawString(f.Label, 50, yPos)
+
+		dc.SetRGB(0, 0, 0)
+		setFont(22)
+		dc.DrawStringAnchored(f.Value, 50, yPos+30, 0, 0)
+	}
+
+	// 5. Generate QR Code
+	qrCodeData, err := qrcode.Encode(b.TicketCode, qrcode.Medium, 256)
+	if err != nil {
+		return nil, errors.New("gagal membuat QR code")
+	}
+
+	imgQR, _, err := image.Decode(bytes.NewReader(qrCodeData))
+	if err != nil {
+		return nil, errors.New("gagal membaca gambar QR")
+	}
+
+	// Tempel QR Code di Bawah Tengah
+	qrY := 700.0
+	dc.DrawImageAnchored(imgQR, W/2, int(qrY), 0.5, 0.5)
+
+	// 6. Kode Tiket
+	dc.SetRGB(0, 0, 0)
+	setFont(18)
+	dc.DrawStringAnchored(b.TicketCode, W/2, qrY+140, 0.5, 0.5)
+
+	// Status
+	dc.SetRGB(0, 0.6, 0)
+	setFont(16)
+	dc.DrawStringAnchored("STATUS: APPROVED", W/2, qrY+170, 0.5, 0.5)
+
+	// 7. Render ke Buffer PNG
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, dc.Image()); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// [FIX TIMEZONE] Helper: Format Tanggal Indonesia dengan Konversi WIB
+func formatDateIndo(start, end time.Time) string {
+	// KONVERSI KE WIB (Asia/Jakarta)
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		fmt.Println("Warning: Timezone Asia/Jakarta not found, using Local.")
+		loc = time.Local
+	}
+	start = start.In(loc)
+	end = end.In(loc)
+
+	days := []string{"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"}
+	months := []string{"", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"}
+
+	dayStr := days[start.Weekday()]
+	monthStr := months[start.Month()]
+	dateStr := fmt.Sprintf("%d %s %d", start.Day(), monthStr, start.Year())
+
+	timeStr := fmt.Sprintf("%s - %s WIB", start.Format("15.04"), end.Format("15.04"))
+
+	return fmt.Sprintf("%s, %s (%s)", dayStr, dateStr, timeStr)
+}
+
+// ==========================
+// EXCEL REPORT GENERATOR
+// ==========================
+func GenerateExcelReport(bookings []BookingResponse, startDate, endDate string) (*bytes.Buffer, error) {
+	f := excelize.NewFile()
+	sheetName := "Laporan Kehadiran"
+	index, _ := f.NewSheet(sheetName)
+	f.SetActiveSheet(index)
+	f.DeleteSheet("Sheet1")
+
+	// 1. Header Judul
+	f.MergeCell(sheetName, "A1", "I1")
+	f.SetCellValue(sheetName, "A1", fmt.Sprintf("LAPORAN KEHADIRAN PENGGUNAAN FASILITAS (%s s/d %s)", startDate, endDate))
+
+	styleTitle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 14},
+		Alignment: &excelize.Alignment{Horizontal: "center"},
+	})
+	f.SetCellStyle(sheetName, "A1", "I1", styleTitle)
+
+	// 2. Header Kolom
+	headers := []string{"No", "Nama User", "NIM/NIP", "Fasilitas", "Tanggal", "Jadwal", "Check-In", "Check-Out", "Status Kehadiran"}
+	columns := []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"}
+
+	for i, h := range headers {
+		cell := fmt.Sprintf("%s3", columns[i])
+		f.SetCellValue(sheetName, cell, h)
+	}
+
+	// 3. Style Header
+	styleHeader, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#FFFFCC"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "000000", Style: 1}, {Type: "top", Color: "000000", Style: 1},
+			{Type: "bottom", Color: "000000", Style: 1}, {Type: "right", Color: "000000", Style: 1},
+		},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	f.SetCellStyle(sheetName, "A3", "I3", styleHeader)
+
+	// [FIX TIMEZONE] Load lokasi WIB untuk Excel
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.Local
+	}
+
+	// 4. Isi Data
+	row := 4
+	for i, b := range bookings {
+		// [FIX TIMEZONE] Konversi Waktu ke WIB
+		startTime := b.StartTime.In(loc)
+		endTime := b.EndTime.In(loc)
+
+		// Format Data
+		dateStr := startTime.Format("02/01/2006")
+		scheduleStr := fmt.Sprintf("%s - %s", startTime.Format("15:04"), endTime.Format("15:04"))
+
+		checkInStr := "-"
+		if b.CheckedInAt != nil {
+			checkInStr = b.CheckedInAt.In(loc).Format("15:04:05") // [FIX TIMEZONE]
+		}
+
+		checkOutStr := "-"
+		if b.CheckedOutAt != nil {
+			checkOutStr = b.CheckedOutAt.In(loc).Format("15:04:05") // [FIX TIMEZONE]
+		}
+
+		status := "Unknown"
+		switch b.AttendanceStatus {
+		case "on_time":
+			status = "Tepat Waktu"
+		case "late":
+			status = "Terlambat"
+		case "no_show":
+			status = "Tidak Hadir"
+		default:
+			if b.IsCheckedIn && !b.IsCheckedOut {
+				status = "Sedang Berjalan"
+			}
+			if !b.IsCheckedIn && b.Status == "approved" {
+				status = "Belum Hadir"
+			}
+		}
+
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), b.UserName)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), b.User.Profile.IdentityNumber)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), b.FacilityName)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), dateStr)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), scheduleStr)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), checkInStr)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), checkOutStr)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), status)
+
+		row++
+	}
+
+	// Auto Width
+	f.SetColWidth(sheetName, "B", "B", 25)
+	f.SetColWidth(sheetName, "C", "C", 15)
+	f.SetColWidth(sheetName, "D", "D", 20)
+	f.SetColWidth(sheetName, "E", "F", 15)
+	f.SetColWidth(sheetName, "I", "I", 15)
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }

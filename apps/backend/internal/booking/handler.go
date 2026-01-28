@@ -1,7 +1,9 @@
 package booking
 
 import (
+	"bytes"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -183,8 +185,10 @@ func MyBookingsHandler(db *sql.DB) fiber.Handler {
 func ListAllHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		statusFilter := c.Query("status")
+		facilityID := c.Query("facility_id")
+		userID := c.Query("user_id")
 
-		bookings, err := GetAll(db, statusFilter)
+		bookings, err := GetAll(db, statusFilter, facilityID, userID)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{
 				"error": "Gagal memuat data booking",
@@ -240,6 +244,57 @@ func CancelHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
+func GetFacilityScheduleHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		facilityID := c.Params("id")
+
+		schedules, err := GetScheduleByFacility(db, facilityID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Gagal memuat jadwal fasilitas",
+			})
+		}
+
+		if schedules == nil {
+			schedules = []ScheduleResponse{}
+		}
+
+		return c.JSON(schedules)
+	}
+}
+
+// ========================================================
+// HANDLER: DOWNLOAD TICKET IMAGE
+// ========================================================
+func DownloadTicketHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		bookingID := c.Params("id")
+
+		// 1. Ambil Data Booking Lengkap
+		bookingData, err := FindDetailByID(db, bookingID)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Booking tidak ditemukan"})
+		}
+
+		// Validasi: Hanya booking approved/completed yang punya tiket
+		if bookingData.Status != "approved" && bookingData.Status != "completed" {
+			return c.Status(400).JSON(fiber.Map{"error": "Tiket belum tersedia (Status: " + bookingData.Status + ")"})
+		}
+
+		// 2. Generate Gambar Tiket (Memanggil Service)
+		imgBytes, err := GenerateTicketImage(*bookingData)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal membuat tiket: " + err.Error()})
+		}
+
+		// 3. Kirim Response Gambar (PNG)
+		c.Set("Content-Type", "image/png")
+		// c.Set("Content-Disposition", "attachment; filename=ticket-"+bookingData.TicketCode+".png") // Opsional: Force download
+
+		return c.SendStream(bytes.NewReader(imgBytes))
+	}
+}
+
 func mapBookingError(err error) (int, string) {
 	msg := err.Error()
 
@@ -256,4 +311,56 @@ func mapBookingError(err error) (int, string) {
 	}
 
 	return 400, msg
+}
+
+// ========================================================
+// HANDLER: ATTENDANCE LOGS (JSON & EXCEL)
+// ========================================================
+
+// GetAttendanceLogsHandler menampilkan data di tabel Admin
+func GetAttendanceLogsHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		startDate := c.Query("start_date") // Format: YYYY-MM-DD
+		endDate := c.Query("end_date")
+		status := c.Query("status")
+
+		logs, err := GetAttendanceLogs(db, startDate, endDate, status)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal memuat log kehadiran"})
+		}
+
+		if logs == nil {
+			logs = []BookingResponse{}
+		}
+
+		return c.JSON(logs)
+	}
+}
+
+// ExportAttendanceHandler mendownload file Excel
+func ExportAttendanceHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		startDate := c.Query("start_date")
+		endDate := c.Query("end_date")
+		status := c.Query("status")
+
+		// 1. Ambil data
+		logs, err := GetAttendanceLogs(db, startDate, endDate, status)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal mengambil data untuk export"})
+		}
+
+		// 2. Generate Excel
+		fileBuffer, err := GenerateExcelReport(logs, startDate, endDate)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal membuat file excel: " + err.Error()})
+		}
+
+		// 3. Set Header Download
+		filename := fmt.Sprintf("Laporan_Kehadiran_%s.xlsx", time.Now().Format("20060102_1504"))
+		c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		c.Set("Content-Disposition", "attachment; filename="+filename)
+
+		return c.SendStream(bytes.NewReader(fileBuffer.Bytes()))
+	}
 }

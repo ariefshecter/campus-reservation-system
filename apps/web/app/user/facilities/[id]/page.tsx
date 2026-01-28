@@ -1,26 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { format, isSameDay, addDays } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
 import {
   ArrowLeft,
   MapPin,
   Users,
   ChevronLeft,
   ChevronRight,
-  Share2,
-  Info,
   Building2,
   Loader2,
   CheckCircle2,
   XCircle,
+  CalendarDays,
+  Clock,
+  User,
+  Share2,
   ExternalLink
 } from "lucide-react";
 import api from "@/lib/axios";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import BookingModal from "@/components/booking/booking-modal";
+import { Card, CardContent } from "@/components/ui/card";
 
 /* =======================
    CONFIG & HELPERS
@@ -31,7 +36,6 @@ const FALLBACK_IMAGE = "/room-placeholder.png";
 function resolveImage(src: string): string {
   if (!src || src.trim() === "") return FALLBACK_IMAGE;
   if (src.startsWith("http")) return src;
-
   const safeBackend = BACKEND_URL.replace(/\/$/, "");
   const safeSrc = src.startsWith("/") ? src : `/${src}`;
   return `${safeBackend}${safeSrc}`.replace(/ /g, "%20");
@@ -51,6 +55,16 @@ type Facility = {
   is_active: boolean;
 };
 
+type BookingSchedule = {
+  id: string;
+  start_time: string;
+  end_time: string;
+  actual_end_time?: string;
+  status: string;
+  attendance_status?: string;
+  user_name: string;
+};
+
 /* =======================
    PAGE COMPONENT
 ======================= */
@@ -59,6 +73,7 @@ export default function FacilityDetailPage() {
   const router = useRouter();
 
   const [facility, setFacility] = useState<Facility | null>(null);
+  const [schedules, setSchedules] = useState<BookingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
@@ -67,29 +82,70 @@ export default function FacilityDetailPage() {
   /* =======================
      FETCH DATA
   ======================= */
+  const fetchFacility = useCallback(async () => {
+    try {
+      const res = await api.get(`/facilities/${id}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = res.data as any;
+      const safeData: Facility = {
+        ...raw,
+        photo_url: Array.isArray(raw.photo_url) ? raw.photo_url : [],
+      };
+      setFacility(safeData);
+    } catch (err) {
+      console.error("Gagal memuat detail fasilitas:", err);
+    }
+  }, [id]);
+
+  const fetchSchedules = useCallback(async () => {
+    try {
+      // Menggunakan endpoint khusus jadwal
+      const res = await api.get(`/facilities/${id}/schedule`);
+      const allBookings = res.data as BookingSchedule[];
+      
+      // Filter: Hanya Hari Ini dan Besok
+      const today = new Date();
+      const tomorrow = addDays(today, 1);
+      
+      const filtered = allBookings.filter(b => {
+        const bookingDate = new Date(b.start_time);
+        
+        // Cek apakah tanggal booking sama dengan hari ini ATAU besok
+        const isToday = isSameDay(bookingDate, today);
+        const isTomorrow = isSameDay(bookingDate, tomorrow);
+
+        // Status yang valid untuk ditampilkan
+        const isValidStatus = ['approved', 'completed', 'pending'].includes(b.status);
+
+        return (isToday || isTomorrow) && isValidStatus;
+      });
+
+      setSchedules(filtered);
+    } catch (err) {
+      console.error("Gagal memuat jadwal:", err);
+    }
+  }, [id]);
+
+  // Initial Load
   useEffect(() => {
     if (!id) return;
 
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await api.get(`/facilities/${id}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw = res.data as any;
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchFacility(), fetchSchedules()]);
+      setLoading(false);
+    };
 
-        const safeData: Facility = {
-          ...raw,
-          photo_url: Array.isArray(raw.photo_url) ? raw.photo_url : [],
-        };
+    loadData();
+  }, [id, fetchFacility, fetchSchedules]);
 
-        setFacility(safeData);
-      } catch (err) {
-        console.error("Gagal memuat detail fasilitas:", err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  // Auto Refresh Jadwal setiap 60 detik (Real-time update)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchSchedules();
+    }, 60000); 
+    return () => clearInterval(interval);
+  }, [fetchSchedules]);
 
   /* =======================
      SLIDER LOGIC
@@ -217,87 +273,126 @@ export default function FacilityDetailPage() {
                 </>
               )}
 
+
               {/* Status Badge */}
               <div className="absolute top-4 left-4">
-                <Badge className={`backdrop-blur-md border-0 px-3 py-1 text-xs font-medium shadow-sm ${
-                    facility.is_active 
-                      ? "bg-emerald-500/80 text-white" 
-                      : "bg-red-500/80 text-white"
-                }`}>
+                <Badge className={`backdrop-blur-md border-0 px-3 py-1 text-xs font-medium shadow-sm ${facility.is_active ? "bg-emerald-500/80 text-white" : "bg-red-500/80 text-white"}`}>
                     {facility.is_active ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5"/> Tersedia</> : <><XCircle className="w-3.5 h-3.5 mr-1.5"/> Non-Aktif</>}
                 </Badge>
               </div>
             </div>
-
-            {/* Link Debugging Gambar */}
+            
+             {/* Link Debugging Gambar */}
              <div className="pt-3 flex justify-end opacity-30 hover:opacity-100 transition-opacity">
                <a href={resolvedUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-indigo-400 hover:underline uppercase tracking-wider">
                   <ExternalLink className="w-3 h-3" /> Lihat Gambar Asli
                </a>
              </div>
+
+            {/* Info Facility */}
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-4">{facility.name}</h1>
+              <div className="flex flex-wrap gap-3 mb-6">
+                <div className="flex items-center gap-2 text-indigo-300 bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-500/20 text-sm"><MapPin className="w-4 h-4" /> {facility.location}</div>
+                <div className="flex items-center gap-2 text-slate-300 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-white/10 text-sm"><Users className="w-4 h-4" /> Kapasitas {facility.capacity}</div>
+              </div>
+              <div className="text-slate-300 leading-relaxed text-sm bg-slate-900/30 p-4 rounded-xl border border-white/5">
+                {facility.description || "Tidak ada deskripsi."}
+              </div>
+            </div>
           </div>
 
-          {/* KOLOM KANAN: INFO & BOOKING */}
-          <div className="flex flex-col h-full space-y-8">
+          {/* === KANAN: JADWAL & BOOKING === */}
+          <div className="flex flex-col h-full space-y-6">
             
-            {/* 1. Header Info */}
-            <div>
-              {/* NAMA RUANGAN */}
-              <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-6">
-                {facility.name}
-              </h1>
-              
-              {/* DETAILS */}
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <div className="flex items-center gap-2 text-indigo-300 bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-500/20">
-                  <MapPin className="w-4 h-4" />
-                  <span className="font-medium">{facility.location || "-"}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-300 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-white/10">
-                  <Users className="w-4 h-4" />
-                  <span className="font-medium">Kapasitas {facility.capacity}</span>
-                </div>
+            {/* Jadwal Section */}
+            <Card className="bg-slate-900/50 border-white/10 flex-1 flex flex-col overflow-hidden">
+               <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
+                  <h3 className="font-semibold text-white flex items-center gap-2">
+                     <CalendarDays className="w-4 h-4 text-indigo-400" />
+                     Jadwal Penggunaan
+                  </h3>
+                  <Badge variant="outline" className="border-white/10 text-slate-400 text-[10px]">
+                     Hari Ini & Besok
+                  </Badge>
+               </div>
+               
+               <CardContent className="p-0 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                  {schedules.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center h-40 text-slate-500 gap-2">
+                        <CalendarDays className="w-8 h-8 opacity-20" />
+                        <p className="text-sm">Belum ada jadwal booking.</p>
+                     </div>
+                  ) : (
+                     <div className="divide-y divide-white/5">
+                        {schedules.map((sch) => {
+                           // Logika Tampilan Waktu Selesai
+                           const isCompletedEarly = sch.status === 'completed' && sch.actual_end_time;
+                           const displayEndTime = isCompletedEarly ? sch.actual_end_time : sch.end_time;
+                           const isLate = sch.attendance_status === 'late';
+                           const isNoShow = sch.attendance_status === 'no_show';
+
+                           return (
+                              <div key={sch.id} className="p-4 hover:bg-white/5 transition-colors">
+                                 <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                       <Badge variant="outline" className={`
+                                          text-[10px] px-1.5 py-0 h-5 border-0 font-medium
+                                          ${sch.status === 'approved' ? 'bg-blue-500/20 text-blue-300' : ''}
+                                          ${sch.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' : ''}
+                                          ${sch.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : ''}
+                                       `}>
+                                          {sch.status === 'approved' ? 'Sedang Berjalan' : 
+                                           sch.status === 'completed' ? 'Selesai' : sch.status}
+                                       </Badge>
+                                       {isLate && <Badge className="bg-red-500/20 text-red-400 border-0 text-[10px] h-5">Telat</Badge>}
+                                       {isNoShow && <Badge className="bg-slate-500/20 text-slate-400 border-0 text-[10px] h-5">No Show</Badge>}
+                                    </div>
+                                    <span className="text-xs text-slate-500">
+                                       {format(new Date(sch.start_time), "dd MMM", { locale: idLocale })}
+                                    </span>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-3 mb-1">
+                                    <Clock className="w-4 h-4 text-slate-400" />
+                                    <div className="text-sm font-medium text-slate-200">
+                                       {format(new Date(sch.start_time), "HH:mm")} - {format(new Date(displayEndTime!), "HH:mm")}
+                                       {isCompletedEarly && <span className="text-[10px] text-emerald-400 ml-2">(Checkout Awal)</span>}
+                                    </div>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-3 pl-7">
+                                    <User className="w-3 h-3 text-slate-500" />
+                                    <span className="text-xs text-slate-400 truncate w-40 block">{sch.user_name}</span>
+                                 </div>
+                              </div>
+                           )
+                        })}
+                     </div>
+                  )}
+               </CardContent>
+            </Card>
+
+            {/* Booking Action */}
+            <div className="p-6 bg-indigo-950/20 rounded-xl border border-indigo-500/20">
+              <div className="flex justify-between items-end">
+                 <div>
+                    <p className="text-xs text-indigo-300 uppercase tracking-wider mb-1">Biaya Sewa</p>
+                    <span className="text-3xl font-bold text-white">
+                      {facility.price > 0 ? `Rp${facility.price.toLocaleString("id-ID")}` : "Gratis"}
+                    </span>
+                 </div>
+                 <Button
+                    size="lg"
+                    className={`font-semibold shadow-xl shadow-indigo-900/20 ${!facility.is_active ? 'bg-slate-700 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500'}`}
+                    onClick={() => setOpenBooking(true)}
+                    disabled={!facility.is_active}
+                  >
+                    {facility.is_active ? "Booking Sekarang" : "Tidak Aktif"}
+                  </Button>
               </div>
             </div>
             
-            {/* 2. Deskripsi */}
-            <div className="space-y-3 flex-grow">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Info className="w-5 h-5 text-indigo-400" /> 
-                Deskripsi
-              </h3>
-              <div className="text-slate-300 leading-relaxed whitespace-pre-wrap text-base font-light bg-slate-900/30 p-4 rounded-xl border border-white/5">
-                {facility.description || "Tidak ada deskripsi yang tersedia."}
-              </div>
-            </div>
-
-            {/* 3. Booking Action */}
-            <div className="pt-6 border-t border-white/10">
-              <div className="flex items-center justify-between gap-6">
-                
-                {/* Harga */}
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Harga Sewa</p>
-                  <span className="text-2xl font-bold text-white">
-                    {facility.price > 0 ? `Rp${facility.price.toLocaleString("id-ID")}` : "Gratis"}
-                  </span>
-                </div>
-
-                {/* Tombol Booking */}
-                <Button
-                  className={`px-8 h-12 font-semibold rounded-lg shadow-md transition-all active:scale-95 text-base ${
-                    facility.is_active
-                      ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
-                      : "bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5"
-                  }`}
-                  onClick={() => setOpenBooking(true)}
-                  disabled={!facility.is_active}
-                >
-                  {facility.is_active ? "Booking" : "Tidak Aktif"}
-                </Button>
-              </div>
-            </div>
-
           </div>
         </div>
       </main>
@@ -305,7 +400,11 @@ export default function FacilityDetailPage() {
       <BookingModal
         open={openBooking}
         onClose={() => setOpenBooking(false)}
-        onSuccess={() => router.push("/user/dashboard")}
+        onSuccess={() => {
+           setOpenBooking(false);
+           fetchSchedules(); // Refresh jadwal setelah booking
+           router.refresh();
+        }}
         facilityId={facility.id}      
         facilityName={facility.name}
       />
