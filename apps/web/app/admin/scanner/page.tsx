@@ -176,7 +176,7 @@ export default function AdminScannerPage() {
                           </div>
                           <div className="flex items-center gap-1 text-slate-500">
                             <Clock className="h-3 w-3" /> 
-                            {new Date(b.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            {new Date(b.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit',hour12: false})}
                           </div>
                         </div>
                       </TableCell>

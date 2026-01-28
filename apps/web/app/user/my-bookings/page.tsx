@@ -46,6 +46,7 @@ type Booking = {
   ticket_code?: string;
   is_checked_in?: boolean;
   is_checked_out?: boolean;
+  attendance_status?: string; // Field baru untuk status kehadiran detail
   // Field User & Profile dari Backend
   user: {
     name: string;
@@ -84,7 +85,7 @@ export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null); // State untuk loading download
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -126,7 +127,7 @@ export default function MyBookingsPage() {
     }
   };
 
-  // 3. Logic Download Tiket GAMBAR (PNG) dari Backend
+  // 3. Logic Download Tiket GAMBAR (PNG)
   const downloadTicket = async (item: Booking) => {
     if (!item.ticket_code) {
       toast.error("Kode tiket tidak tersedia");
@@ -134,17 +135,14 @@ export default function MyBookingsPage() {
     }
 
     try {
-      setDownloadingId(item.id); // Set loading state
+      setDownloadingId(item.id); 
 
-      // Request Blob Image dari Backend (Protected Route)
       const response = await api.get(`/bookings/${item.id}/ticket`, {
         responseType: 'blob' 
       });
 
-      // Buat URL dari Blob
       const url = window.URL.createObjectURL(new Blob([response.data]));
       
-      // Trigger Download via elemen <a> virtual
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Tiket_UniSpace_${item.ticket_code}.png`);
@@ -152,7 +150,6 @@ export default function MyBookingsPage() {
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
       link.remove();
       window.URL.revokeObjectURL(url);
       
@@ -162,7 +159,7 @@ export default function MyBookingsPage() {
       console.error("Gagal download tiket:", error);
       toast.error("Gagal mengunduh tiket gambar. Silakan coba lagi.");
     } finally {
-      setDownloadingId(null); // Reset loading state
+      setDownloadingId(null); 
     }
   };
 
@@ -179,8 +176,35 @@ export default function MyBookingsPage() {
     });
   }, [bookings, search, statusFilter]);
 
-  // 5. Helper Status Badge
+  // 5. Helper Status Badge (UPDATED)
   const renderStatus = (item: Booking) => {
+    // === HANDLING STATUS COMPLETED (SELESAI) ===
+    if (item.status === "completed") {
+      return (
+        <div className="flex flex-col items-start gap-1.5">
+          <Badge className="bg-slate-500 hover:bg-slate-600">Selesai</Badge>
+          
+          {/* Badge Detail Kehadiran */}
+          {item.attendance_status === "on_time" && (
+            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/10 text-[10px] h-5 px-1.5">
+              Tepat Waktu
+            </Badge>
+          )}
+          {item.attendance_status === "late" && (
+            <Badge variant="outline" className="text-yellow-400 border-yellow-500/30 bg-yellow-500/10 text-[10px] h-5 px-1.5">
+              Telat / Terlambat
+            </Badge>
+          )}
+          {item.attendance_status === "no_show" && (
+            <Badge variant="outline" className="text-red-400 border-red-500/30 bg-red-500/10 text-[10px] h-5 px-1.5">
+              Tidak Hadir
+            </Badge>
+          )}
+        </div>
+      );
+    }
+
+    // === HANDLING STATUS LAINNYA ===
     let badge;
     switch (item.status) {
       case "approved":
@@ -192,13 +216,11 @@ export default function MyBookingsPage() {
       case "canceled":
         badge = <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">Dibatalkan</Badge>;
         break;
-      case "completed":
-        badge = <Badge className="bg-slate-500 hover:bg-slate-600">Selesai</Badge>;
-        break;
       default: // pending
         badge = <Badge className="bg-blue-500 hover:bg-blue-600">Menunggu</Badge>;
     }
 
+    // Tambahan info admin jika disetujui/ditolak
     if ((item.status === "approved" || item.status === "rejected") && item.admin_name) {
       return (
         <div className="flex flex-col items-start gap-1">
@@ -326,7 +348,7 @@ export default function MyBookingsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => downloadTicket(item)}
-                              disabled={downloadingId === item.id} // Disable saat loading
+                              disabled={downloadingId === item.id} 
                               className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
                             >
                               {downloadingId === item.id ? (
@@ -353,11 +375,6 @@ export default function MyBookingsPage() {
                                 <><Trash2 className="mr-1 h-3 w-3" /> Batal</>
                               )}
                             </Button>
-                          )}
-
-                          {/* Info jika sudah Check-out */}
-                          {item.is_checked_out && (
-                            <span className="text-xs text-slate-500 italic py-1 px-2">Selesai</span>
                           )}
                         </div>
                       </TableCell>

@@ -17,7 +17,6 @@ import {
   XCircle,
   CalendarDays,
   Clock,
-  User,
   Share2,
   ExternalLink
 } from "lucide-react";
@@ -103,7 +102,6 @@ export default function FacilityDetailPage() {
       const res = await api.get(`/facilities/${id}/schedule`);
       const allBookings = res.data as BookingSchedule[];
       
-      // Filter: Hanya Hari Ini dan Besok
       const today = new Date();
       const tomorrow = addDays(today, 1);
       
@@ -114,8 +112,9 @@ export default function FacilityDetailPage() {
         const isToday = isSameDay(bookingDate, today);
         const isTomorrow = isSameDay(bookingDate, tomorrow);
 
-        // Status yang valid untuk ditampilkan
-        const isValidStatus = ['approved', 'completed', 'pending'].includes(b.status);
+        // Filter: HANYA yang sudah diterima (approved) atau selesai (completed)
+        // Pending tidak ditampilkan lagi.
+        const isValidStatus = ['approved', 'completed'].includes(b.status);
 
         return (isToday || isTomorrow) && isValidStatus;
       });
@@ -225,8 +224,7 @@ export default function FacilityDetailPage() {
             <div className="group relative w-full aspect-[4/3] bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg ring-1 ring-white/5">
               
               {currentSrc ? (
-                // PERBAIKAN DI SINI: Hapus class transition dan group-hover:scale
-                // eslint-disable-next-line @next/next/no-img-element
+                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={resolvedUrl}
                   alt={facility.name}
@@ -258,7 +256,7 @@ export default function FacilityDetailPage() {
                     <ChevronRight className="w-5 h-5" />
                   </button>
                   
-                  {/* DOTS INDICATOR (.-..) */}
+                  {/* DOTS INDICATOR */}
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 px-3 py-1.5 bg-black/30 backdrop-blur-sm rounded-full border border-white/5">
                     {photos.map((_, idx) => (
                       <button
@@ -272,7 +270,6 @@ export default function FacilityDetailPage() {
                   </div>
                 </>
               )}
-
 
               {/* Status Badge */}
               <div className="absolute top-4 left-4">
@@ -321,39 +318,31 @@ export default function FacilityDetailPage() {
                   {schedules.length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-40 text-slate-500 gap-2">
                         <CalendarDays className="w-8 h-8 opacity-20" />
-                        <p className="text-sm">Belum ada jadwal booking.</p>
+                        <p className="text-sm">Belum ada ruangan yang terpakai.</p>
                      </div>
                   ) : (
                      <div className="divide-y divide-white/5">
                         {schedules.map((sch) => {
-                           // Logika Tampilan Waktu Selesai
                            const isCompletedEarly = sch.status === 'completed' && sch.actual_end_time;
                            const displayEndTime = isCompletedEarly ? sch.actual_end_time : sch.end_time;
-                           const isLate = sch.attendance_status === 'late';
-                           const isNoShow = sch.attendance_status === 'no_show';
 
                            return (
                               <div key={sch.id} className="p-4 hover:bg-white/5 transition-colors">
-                                 <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                       <Badge variant="outline" className={`
-                                          text-[10px] px-1.5 py-0 h-5 border-0 font-medium
-                                          ${sch.status === 'approved' ? 'bg-blue-500/20 text-blue-300' : ''}
-                                          ${sch.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' : ''}
-                                          ${sch.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : ''}
-                                       `}>
-                                          {sch.status === 'approved' ? 'Sedang Berjalan' : 
-                                           sch.status === 'completed' ? 'Selesai' : sch.status}
-                                       </Badge>
-                                       {isLate && <Badge className="bg-red-500/20 text-red-400 border-0 text-[10px] h-5">Telat</Badge>}
-                                       {isNoShow && <Badge className="bg-slate-500/20 text-slate-400 border-0 text-[10px] h-5">No Show</Badge>}
-                                    </div>
+                                 <div className="flex justify-between items-center mb-2">
+                                    {/* STATUS BADGE DISEDERHANAKAN */}
+                                    <Badge variant="outline" className={`
+                                       text-[10px] px-2 py-0.5 border-0 font-medium
+                                       ${sch.status === 'approved' ? 'bg-red-500/20 text-red-300' : 'bg-slate-700/50 text-slate-400'}
+                                    `}>
+                                       {sch.status === 'approved' ? 'Terisi' : 'Selesai'}
+                                    </Badge>
+                                    
                                     <span className="text-xs text-slate-500">
                                        {format(new Date(sch.start_time), "dd MMM", { locale: idLocale })}
                                     </span>
                                  </div>
                                  
-                                 <div className="flex items-center gap-3 mb-1">
+                                 <div className="flex items-center gap-3">
                                     <Clock className="w-4 h-4 text-slate-400" />
                                     <div className="text-sm font-medium text-slate-200">
                                        {format(new Date(sch.start_time), "HH:mm")} - {format(new Date(displayEndTime!), "HH:mm")}
@@ -361,10 +350,7 @@ export default function FacilityDetailPage() {
                                     </div>
                                  </div>
                                  
-                                 <div className="flex items-center gap-3 pl-7">
-                                    <User className="w-3 h-3 text-slate-500" />
-                                    <span className="text-xs text-slate-400 truncate w-40 block">{sch.user_name}</span>
-                                 </div>
+                                 {/* NAMA USER DIHILANGKAN UNTUK PRIVASI */}
                               </div>
                            )
                         })}
