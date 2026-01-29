@@ -29,6 +29,39 @@ func ListHandler(db *sql.DB) fiber.Handler {
 }
 
 // ==========================
+// GET ONE USER HANDLER (DETAIL + STATS)
+// ==========================
+func GetOneHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+
+		// 1. Ambil Data User & Profile
+		user, err := FindByID(db, id)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
+		}
+
+		// 2. Ambil Statistik Kehadiran (Hitung dari booking)
+		stats, err := GetUserAttendanceStats(db, id)
+		if err != nil {
+			// Jika gagal hitung stats, jangan error 500, cukup kirim data kosong
+			stats = AttendanceStats{}
+		}
+
+		// 3. Return JSON Gabungan
+		return c.JSON(fiber.Map{
+			"id":         user.ID,
+			"name":       user.Name,
+			"email":      user.Email,
+			"role":       user.Role,
+			"created_at": user.CreatedAt,
+			"profile":    user.Profile, // Data profile (alamat, hp, dll)
+			"stats":      stats,        // Data statistik (on_time, late, no_show)
+		})
+	}
+}
+
+// ==========================
 // UPDATE ROLE HANDLER
 // ==========================
 func UpdateRoleHandler(db *sql.DB) fiber.Handler {
@@ -76,7 +109,7 @@ func DeleteUserHandler(db *sql.DB) fiber.Handler {
 }
 
 // ==========================
-// CHANGE PASSWORD HANDLER (BARU)
+// CHANGE PASSWORD HANDLER
 // ==========================
 func ChangePasswordHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -92,7 +125,6 @@ func ChangePasswordHandler(db *sql.DB) fiber.Handler {
 		}
 
 		// 1. Ambil data user (termasuk password hash lama) dari DB
-		// Pastikan repository.go memiliki fungsi GetUserByID
 		user, err := GetUserByID(db, userID)
 		if err != nil {
 			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
@@ -110,7 +142,6 @@ func ChangePasswordHandler(db *sql.DB) fiber.Handler {
 		}
 
 		// 4. Update Password di DB
-		// Pastikan repository.go memiliki fungsi UpdatePassword
 		if err := UpdatePassword(db, userID, string(hashedPassword)); err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Gagal menyimpan password baru"})
 		}

@@ -127,6 +127,7 @@ func main() {
 	// 8. USER ROUTES (ADMIN)
 	// ==========================
 	app.Get("/users", auth.JWTProtected(), auth.RequireRole("admin"), user.ListHandler(db))
+	app.Get("/users/:id", auth.JWTProtected(), auth.RequireRole("admin"), user.GetOneHandler(db))
 	app.Patch("/users/:id/role", auth.JWTProtected(), auth.RequireRole("admin"), user.UpdateRoleHandler(db))
 	app.Delete("/users/:id", auth.JWTProtected(), auth.RequireRole("admin"), user.DeleteUserHandler(db))
 

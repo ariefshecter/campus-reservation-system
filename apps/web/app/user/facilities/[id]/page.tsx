@@ -318,7 +318,7 @@ export default function FacilityDetailPage() {
                   {schedules.length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-40 text-slate-500 gap-2">
                         <CalendarDays className="w-8 h-8 opacity-20" />
-                        <p className="text-sm">Belum ada ruangan yang terpakai.</p>
+                        <p className="text-sm">Belum ada jadwal.</p>
                      </div>
                   ) : (
                      <div className="divide-y divide-white/5">

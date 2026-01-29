@@ -101,16 +101,39 @@ func DeleteUser(db *sql.DB, id string) error {
 }
 
 // ==========================
-// GET USER BY ID (FIXED)
+// GET USER BY ID (FIXED: WITH PROFILE)
 // ==========================
 func GetUserByID(db *sql.DB, id string) (*User, error) {
 	var u User
-	// 🔥 PERBAIKAN DISINI: Ganti 'password' jadi 'password_hash'
-	err := db.QueryRow(`
-		SELECT id, name, email, password_hash, role, created_at 
-		FROM users 
-		WHERE id = $1
-	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Password, &u.Role, &u.CreatedAt)
+
+	// Query detail user DENGAN LEFT JOIN ke profiles agar data biodata terbaca
+	query := `
+		SELECT 
+			u.id, u.name, u.email, u.password_hash, u.role, u.created_at,
+			COALESCE(p.full_name, ''),
+			COALESCE(p.phone_number, ''),
+			COALESCE(p.address, ''),
+			COALESCE(p.avatar_url, ''),
+			COALESCE(p.gender, ''),
+			COALESCE(p.identity_number, ''),
+			COALESCE(p.department, ''),
+			COALESCE(p.position, '')
+		FROM users u
+		LEFT JOIN profiles p ON u.id = p.user_id
+		WHERE u.id = $1
+	`
+
+	err := db.QueryRow(query, id).Scan(
+		&u.ID, &u.Name, &u.Email, &u.Password, &u.Role, &u.CreatedAt,
+		&u.Profile.FullName,
+		&u.Profile.PhoneNumber,
+		&u.Profile.Address,
+		&u.Profile.AvatarURL,
+		&u.Profile.Gender,
+		&u.Profile.IdentityNumber,
+		&u.Profile.Department,
+		&u.Profile.Position,
+	)
 
 	if err != nil {
 		return nil, err
@@ -135,4 +158,37 @@ type UserResponse = User
 // Wrapper
 func FindByID(db *sql.DB, id string) (*User, error) {
 	return GetUserByID(db, id)
+}
+
+// ========================================================
+// [BARU] STATISTIK KEHADIRAN USER
+// ========================================================
+
+type AttendanceStats struct {
+	OnTime int `json:"on_time"`
+	Late   int `json:"late"`
+	NoShow int `json:"no_show"`
+	Total  int `json:"total"`
+}
+
+func GetUserAttendanceStats(db *sql.DB, userID string) (AttendanceStats, error) {
+	var stats AttendanceStats
+
+	// Query menghitung jumlah berdasarkan attendance_status
+	query := `
+		SELECT
+			COALESCE(SUM(CASE WHEN attendance_status = 'on_time' THEN 1 ELSE 0 END), 0) as on_time,
+			COALESCE(SUM(CASE WHEN attendance_status = 'late' THEN 1 ELSE 0 END), 0) as late,
+			COALESCE(SUM(CASE WHEN attendance_status = 'no_show' THEN 1 ELSE 0 END), 0) as no_show
+		FROM bookings
+		WHERE user_id = $1 AND deleted_at IS NULL AND status IN ('completed', 'approved')
+	`
+
+	err := db.QueryRow(query, userID).Scan(&stats.OnTime, &stats.Late, &stats.NoShow)
+	if err != nil {
+		return stats, err
+	}
+
+	stats.Total = stats.OnTime + stats.Late + stats.NoShow
+	return stats, nil
 }
