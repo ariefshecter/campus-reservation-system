@@ -40,6 +40,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea"; // [BARU] Import Textarea
+import { Label } from "@/components/ui/label"; // [BARU] Import Label
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 
@@ -268,6 +270,12 @@ export default function AdminBookingsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // [BARU] State untuk Modal Penolakan (Reject)
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   /* =======================
       FETCH BOOKINGS
   ======================= */
@@ -307,13 +315,16 @@ export default function AdminBookingsPage() {
   /* =======================
       APPROVE / REJECT
   ======================= */
+  // [DIPERBARUI] Menerima parameter reason opsional
   const handleUpdateStatus = async (
     id: string,
-    newStatus: "approved" | "rejected"
+    newStatus: "approved" | "rejected",
+    reason: string = ""
   ) => {
     try {
       await api.patch(`/bookings/${id}/status`, {
         status: newStatus,
+        rejection_reason: reason, // Kirim reason ke backend
       });
 
       toast.success(
@@ -323,6 +334,11 @@ export default function AdminBookingsPage() {
       );
 
       fetchBookings();
+      
+      // Reset Modal Reject jika sukses
+      setRejectModalOpen(false);
+      setRejectionReason("");
+      setSelectedBookingId(null);
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("admin-booking-updated"));
@@ -335,6 +351,21 @@ export default function AdminBookingsPage() {
       );
     }
   };
+
+  // [BARU] Handler Tombol Tolak (Buka Modal)
+  const onRejectClick = (id: string) => {
+      setSelectedBookingId(id);
+      setRejectionReason(""); // Reset text
+      setRejectModalOpen(true);
+  };
+
+  // [BARU] Handler Submit di Modal Penolakan
+  const submitRejection = async () => {
+      if (!selectedBookingId) return;
+      setIsSubmitting(true);
+      await handleUpdateStatus(selectedBookingId, "rejected", rejectionReason);
+      setIsSubmitting(false);
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("id-ID", {
@@ -540,11 +571,13 @@ export default function AdminBookingsPage() {
                           >
                             <Check className="h-4 w-4" />
                           </Button>
+                          
+                          {/* [DIPERBARUI] Tombol Tolak sekarang memanggil onRejectClick */}
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-8 w-8 p-0 rounded-full border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-all"
-                            onClick={() => handleUpdateStatus(item.id, "rejected")}
+                            onClick={() => onRejectClick(item.id)}
                             title="Tolak Booking"
                           >
                             <X className="h-4 w-4" />
@@ -570,6 +603,39 @@ export default function AdminBookingsPage() {
          open={isModalOpen} 
          onOpenChange={setIsModalOpen} 
       />
+
+      {/* [BARU] MODAL REASON PENOLAKAN */}
+      <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
+          <DialogContent className="sm:max-w-md">
+             <DialogTitle>Tolak Peminjaman</DialogTitle>
+             <DialogDescription>
+                Berikan alasan mengapa pengajuan ini ditolak agar pengguna dapat memahaminya.
+             </DialogDescription>
+             
+             <div className="space-y-3 py-2">
+                <Label htmlFor="reason">Alasan Penolakan (Opsional)</Label>
+                <Textarea 
+                   id="reason"
+                   placeholder="Contoh: Ruangan sedang dalam perbaikan, jadwal bentrok dengan acara fakultas, dll." 
+                   value={rejectionReason}
+                   onChange={(e) => setRejectionReason(e.target.value)}
+                   className="min-h-[100px]"
+                />
+             </div>
+
+             <div className="flex justify-end gap-2 mt-2">
+                <Button variant="outline" onClick={() => setRejectModalOpen(false)}>Batal</Button>
+                <Button 
+                    variant="destructive" 
+                    onClick={submitRejection} 
+                    disabled={isSubmitting}
+                >
+                   {isSubmitting ? <Loader2 className="animate-spin w-4 h-4 mr-2"/> : null}
+                   Tolak Pengajuan
+                </Button>
+             </div>
+          </DialogContent>
+       </Dialog>
 
     </div>
   );

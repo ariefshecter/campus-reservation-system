@@ -23,7 +23,8 @@ type CreateBookingRequest struct {
 }
 
 type UpdateStatusRequest struct {
-	Status string `json:"status"`
+	Status          string `json:"status"`
+	RejectionReason string `json:"rejection_reason"` // [BARU] Field untuk alasan penolakan
 }
 
 // Request untuk Scan QR (Digunakan untuk In dan Out)
@@ -215,7 +216,8 @@ func UpdateStatusHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		if err := UpdateBookingStatus(db, bookingID, req.Status, adminID); err != nil {
+		// [DIPERBARUI] Mengirimkan req.RejectionReason ke fungsi service
+		if err := UpdateBookingStatus(db, bookingID, req.Status, req.RejectionReason, adminID); err != nil {
 			return c.Status(400).JSON(fiber.Map{
 				"error": err.Error(),
 			})

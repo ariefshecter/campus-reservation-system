@@ -70,6 +70,7 @@ type BookingResponse struct {
 	// Response field baru
 	ActualEndTime    *time.Time `json:"actual_end_time,omitempty"`
 	AttendanceStatus string     `json:"attendance_status,omitempty"`
+	RejectionReason  string     `json:"rejection_reason,omitempty"` // [BARU] Field alasan penolakan
 }
 
 // Struct khusus untuk respon jadwal publik/user
@@ -183,11 +184,28 @@ func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	return &b, nil
 }
 
-func UpdateStatus(db *sql.DB, bookingID string, status string, adminID string, ticketCode string) error {
+// [DIPERBARUI] Menambahkan parameter rejectionReason dan update query
+func UpdateStatus(db *sql.DB, bookingID string, status string, rejectionReason string, adminID string, ticketCode string) error {
+	// Konversi string kosong ke nil agar menjadi NULL di database
+	var ticketCodeVal interface{} = ticketCode
+	if ticketCode == "" {
+		ticketCodeVal = nil
+	}
+
+	var reasonVal interface{} = rejectionReason
+	if rejectionReason == "" {
+		reasonVal = nil
+	}
+
 	_, err := db.Exec(`
-		UPDATE bookings SET status = $1, updated_at = NOW(), updated_by = $2, ticket_code = $4
-		WHERE id = $3 AND deleted_at IS NULL
-	`, status, adminID, bookingID, ticketCode)
+		UPDATE bookings 
+		SET status = $1, 
+			rejection_reason = $2, 
+			updated_at = NOW(), 
+			updated_by = $3, 
+			ticket_code = $4
+		WHERE id = $5 AND deleted_at IS NULL
+	`, status, reasonVal, adminID, ticketCodeVal, bookingID)
 	return err
 }
 
@@ -196,6 +214,7 @@ func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 	return err
 }
 
+// [DIPERBARUI] Menambahkan COALESCE(b.rejection_reason, ”)
 func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	rows, err := db.Query(`
 		SELECT
@@ -206,7 +225,8 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 			COALESCE(b.purpose, '-'), b.created_at,
 			COALESCE(admin.name, '') AS admin_name,
 			COALESCE(b.ticket_code, ''), b.is_checked_in, 
-			b.is_checked_out, COALESCE(b.attendance_status, '')
+			b.is_checked_out, COALESCE(b.attendance_status, ''),
+			COALESCE(b.rejection_reason, '') 
 		FROM bookings b
 		JOIN users u ON b.user_id = u.id
 		LEFT JOIN profiles p ON u.id = p.user_id
@@ -224,6 +244,7 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return scanBookings(rows)
 }
 
+// [DIPERBARUI] Menambahkan COALESCE(b.rejection_reason, ”) dan scan ke struct
 func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingResponse, error) {
 	// Query dinamis
 	query := `
@@ -234,7 +255,8 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 			b.facility_id, COALESCE(f.name, 'Unknown Facility'), b.start_time, b.end_time,
 			b.status::text, COALESCE(b.purpose, '-'), b.created_at, COALESCE(admin.name, '') AS admin_name,
 			COALESCE(b.ticket_code, ''), b.is_checked_in, b.is_checked_out, COALESCE(b.attendance_status, ''),
-			b.actual_end_time
+			b.actual_end_time,
+			COALESCE(b.rejection_reason, '')
 		FROM bookings b
 		JOIN users u ON b.user_id = u.id
 		LEFT JOIN profiles p ON u.id = p.user_id
@@ -285,6 +307,7 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 			&b.User.Profile.Gender, &b.User.Profile.IdentityNumber, &b.User.Profile.Department, &b.User.Profile.Position,
 			&b.FacilityID, &b.FacilityName, &b.StartTime, &b.EndTime, &b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus, &b.ActualEndTime,
+			&b.RejectionReason,
 		); err != nil {
 			return nil, err
 		}
@@ -412,7 +435,7 @@ func ProcessExpiredBookings(db *sql.DB) error {
 	return err
 }
 
-// Helper function untuk scan rows (FindByUserID)
+// [DIPERBARUI] Helper function untuk scan rows (FindByUserID)
 func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 	var bookings []BookingResponse
 	for rows.Next() {
@@ -423,6 +446,7 @@ func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 			&b.FacilityID, &b.FacilityName, &b.StartTime, &b.EndTime,
 			&b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus,
+			&b.RejectionReason,
 		); err != nil {
 			return nil, err
 		}

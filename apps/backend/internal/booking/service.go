@@ -101,7 +101,8 @@ func CancelBooking(db *sql.DB, bookingID string, userID string) error {
 // ==========================
 // APPROVE / REJECT BOOKING (ADMIN)
 // ==========================
-func UpdateBookingStatus(db *sql.DB, bookingID string, newStatus string, adminID string) error {
+// [DIPERBARUI] Menambahkan parameter rejectionReason
+func UpdateBookingStatus(db *sql.DB, bookingID string, newStatus string, rejectionReason string, adminID string) error {
 	if newStatus != "approved" && newStatus != "rejected" {
 		return errors.New("status tidak valid")
 	}
@@ -115,12 +116,44 @@ func UpdateBookingStatus(db *sql.DB, bookingID string, newStatus string, adminID
 		return errors.New("status booking tidak bisa diubah karena sudah diproses")
 	}
 
-	var ticketCode string
+	// Jika status Approved, kosongkan rejection reason
 	if newStatus == "approved" {
-		ticketCode = generateTicketCode()
+		rejectionReason = ""
 	}
 
-	return UpdateStatus(db, bookingID, newStatus, adminID, ticketCode)
+	// MEKANISME RETRY (Maksimal 3 kali percobaan)
+	// Berguna jika Random Code yang digenerate kebetulan sama dengan yang sudah ada
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		var ticketCode string
+		if newStatus == "approved" {
+			ticketCode = generateTicketCode()
+		} else {
+			ticketCode = "" // Akan dikonversi jadi NULL di repository
+		}
+
+		// Panggil Repository
+		err := UpdateStatus(db, bookingID, newStatus, rejectionReason, adminID, ticketCode)
+
+		if err == nil {
+			return nil // Sukses!
+		}
+
+		// Cek jika errornya adalah "Duplicate Key" pada ticket_code
+		if strings.Contains(err.Error(), "bookings_ticket_code_key") {
+			// Jika status REJECTED (ticketCode kosong) tapi masih duplicate,
+			// berarti masalah ada di NULL handling repository (seharusnya sudah fix dengan langkah 1).
+			// Kita hanya retry jika status APPROVED (karena generate random code).
+			if newStatus == "approved" {
+				continue // Coba generate kode baru dan simpan ulang
+			}
+		}
+
+		// Jika error lain, langsung kembalikan error
+		return err
+	}
+
+	return errors.New("gagal memproses booking: terjadi duplikasi kode tiket berulang kali")
 }
 
 // ==========================

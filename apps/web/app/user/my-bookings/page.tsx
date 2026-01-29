@@ -12,7 +12,8 @@ import {
   MapPin, 
   Search, 
   UserCheck,
-  Download
+  Download,
+  MessageSquareWarning // [BARU] Icon untuk pesan penolakan
 } from "lucide-react";
 
 import {
@@ -23,6 +24,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog"; // [BARU] Import Dialog
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +52,8 @@ type Booking = {
   ticket_code?: string;
   is_checked_in?: boolean;
   is_checked_out?: boolean;
-  attendance_status?: string; // Field baru untuk status kehadiran detail
+  attendance_status?: string;
+  rejection_reason?: string; // [BARU] Field alasan penolakan
   // Field User & Profile dari Backend
   user: {
     name: string;
@@ -90,6 +97,10 @@ export default function MyBookingsPage() {
   // Filter States
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+
+  // [BARU] State untuk Modal Pesan Penolakan
+  const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState("");
 
   // 1. Fetch Data
   const fetchBookings = async () => {
@@ -161,6 +172,12 @@ export default function MyBookingsPage() {
     } finally {
       setDownloadingId(null); 
     }
+  };
+
+  // [BARU] Handler Buka Pesan Penolakan
+  const openRejectionMessage = (reason?: string) => {
+      setSelectedMessage(reason || "Tidak ada pesan khusus dari admin.");
+      setMessageModalOpen(true);
   };
 
   // 4. Filter Logic
@@ -342,6 +359,21 @@ export default function MyBookingsPage() {
 
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          
+                          {/* [BARU] Tombol Lihat Pesan (Hanya muncul jika REJECTED) */}
+                          {item.status === "rejected" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openRejectionMessage(item.rejection_reason)}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                                title="Lihat Alasan Penolakan"
+                              >
+                                <MessageSquareWarning className="mr-1 h-4 w-4" />
+                                Info
+                              </Button>
+                          )}
+
                           {/* Tombol Tiket (Hanya untuk Approved/Completed) */}
                           {(item.status === "approved" || item.status === "completed") && item.ticket_code && (
                             <Button
@@ -386,6 +418,28 @@ export default function MyBookingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* [BARU] MODAL VIEW PESAN PENOLAKAN */}
+       <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
+          <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100">
+             <DialogTitle className="flex items-center gap-2 text-red-400">
+                <MessageSquareWarning className="w-5 h-5"/>
+                Alasan Penolakan
+             </DialogTitle>
+             
+             {/* PERBAIKAN: Menggunakan &quot; untuk menghindari error ESLint */}
+             <div className="p-4 bg-red-950/30 text-red-200 rounded-lg border border-red-900/50 text-sm italic">
+                &quot;{selectedMessage}&quot;
+             </div>
+
+             <div className="flex justify-end">
+                <Button variant="secondary" onClick={() => setMessageModalOpen(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700">
+                   Tutup
+                </Button>
+             </div>
+          </DialogContent>
+       </Dialog>
+
     </div>
   );
 }
