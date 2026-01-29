@@ -28,6 +28,9 @@ type Booking struct {
 	// Field baru untuk sinkronisasi DB
 	ActualEndTime    sql.NullTime   `json:"actual_end_time"`
 	AttendanceStatus sql.NullString `json:"attendance_status"`
+	// Field baru untuk fitur ulasan
+	ReviewComment sql.NullString `json:"review_comment"`
+	ReviewedAt    sql.NullTime   `json:"reviewed_at"`
 }
 
 type Profile struct {
@@ -70,7 +73,10 @@ type BookingResponse struct {
 	// Response field baru
 	ActualEndTime    *time.Time `json:"actual_end_time,omitempty"`
 	AttendanceStatus string     `json:"attendance_status,omitempty"`
-	RejectionReason  string     `json:"rejection_reason,omitempty"` // [BARU] Field alasan penolakan
+	RejectionReason  string     `json:"rejection_reason,omitempty"`
+	// Response field baru untuk ulasan
+	ReviewComment string     `json:"review_comment,omitempty"`
+	ReviewedAt    *time.Time `json:"reviewed_at,omitempty"`
 }
 
 // Struct khusus untuk respon jadwal publik/user
@@ -87,9 +93,9 @@ type ScheduleResponse struct {
 // ========================================================
 // REPOSITORY FUNCTIONS
 // ========================================================
+
 // Fungsi untuk mengambil jadwal berdasarkan Facility ID (Aman untuk publik)
 func GetScheduleByFacility(db *sql.DB, facilityID string) ([]ScheduleResponse, error) {
-	// Ambil data 2 hari terakhir sampai masa depan
 	rows, err := db.Query(`
 		SELECT 
 			b.id, b.start_time, b.end_time, b.actual_end_time, 
@@ -139,14 +145,11 @@ func FindByID(db *sql.DB, id string) (status string, ownerID string, err error) 
 	return
 }
 
-// Menambahkan fungsi FindDetailByID untuk Generate Tiket
 func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	var b BookingResponse
-	// HANYA deklarasikan variabel yang dipakai
 	var actualEndTime sql.NullTime
 	var ticketCode sql.NullString
 
-	// Query lengkap dengan JOIN ke profiles untuk ambil NIM/IdentityNumber
 	err := db.QueryRow(`
 		SELECT 
 			b.id, b.user_id, u.name, u.email,
@@ -174,7 +177,6 @@ func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	if ticketCode.Valid {
 		b.TicketCode = ticketCode.String
 	}
-	// Gunakan nama user dari profile jika ada, jika tidak pakai nama akun
 	if b.User.Profile.FullName != "" {
 		b.UserName = b.User.Profile.FullName
 	} else {
@@ -184,9 +186,7 @@ func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	return &b, nil
 }
 
-// [DIPERBARUI] Menambahkan parameter rejectionReason dan update query
 func UpdateStatus(db *sql.DB, bookingID string, status string, rejectionReason string, adminID string, ticketCode string) error {
-	// Konversi string kosong ke nil agar menjadi NULL di database
 	var ticketCodeVal interface{} = ticketCode
 	if ticketCode == "" {
 		ticketCodeVal = nil
@@ -214,7 +214,18 @@ func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 	return err
 }
 
-// [DIPERBARUI] Menambahkan COALESCE(b.rejection_reason, ”)
+// UpdateReview menyimpan atau memperbarui ulasan dari user
+func UpdateReview(db *sql.DB, bookingID string, userID string, comment string) error {
+	_, err := db.Exec(`
+        UPDATE bookings 
+        SET review_comment = $1, 
+            reviewed_at = NOW() 
+        WHERE id = $2 AND user_id = $3 AND status = 'completed'
+    `, comment, bookingID, userID)
+	return err
+}
+
+// [PERBAIKAN] Menambahkan kolom review_comment dan reviewed_at pada SELECT
 func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	rows, err := db.Query(`
 		SELECT
@@ -226,7 +237,9 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 			COALESCE(admin.name, '') AS admin_name,
 			COALESCE(b.ticket_code, ''), b.is_checked_in, 
 			b.is_checked_out, COALESCE(b.attendance_status, ''),
-			COALESCE(b.rejection_reason, '') 
+			COALESCE(b.rejection_reason, ''),
+			COALESCE(b.review_comment, ''), -- [FIX] Tambahkan ini
+			b.reviewed_at                   -- [FIX] Tambahkan ini
 		FROM bookings b
 		JOIN users u ON b.user_id = u.id
 		LEFT JOIN profiles p ON u.id = p.user_id
@@ -244,9 +257,8 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return scanBookings(rows)
 }
 
-// [DIPERBARUI] Menambahkan COALESCE(b.rejection_reason, ”) dan scan ke struct
+// [PERBAIKAN] Menambahkan kolom review_comment dan reviewed_at pada SELECT
 func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingResponse, error) {
-	// Query dinamis
 	query := `
 		SELECT
 			b.id, u.id, u.name, u.email,
@@ -256,7 +268,9 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 			b.status::text, COALESCE(b.purpose, '-'), b.created_at, COALESCE(admin.name, '') AS admin_name,
 			COALESCE(b.ticket_code, ''), b.is_checked_in, b.is_checked_out, COALESCE(b.attendance_status, ''),
 			b.actual_end_time,
-			COALESCE(b.rejection_reason, '')
+			COALESCE(b.rejection_reason, ''),
+			COALESCE(b.review_comment, ''), -- [FIX] Tambahkan ini
+			b.reviewed_at                   -- [FIX] Tambahkan ini
 		FROM bookings b
 		JOIN users u ON b.user_id = u.id
 		LEFT JOIN profiles p ON u.id = p.user_id
@@ -265,32 +279,28 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 		WHERE b.deleted_at IS NULL
 	`
 
-	// Array argumen untuk query param ($1, $2, dst)
 	var args []interface{}
 	argCounter := 1
 
-	// Filter Status
 	if statusFilter != "" {
 		query += fmt.Sprintf(" AND b.status::text = $%d", argCounter)
 		args = append(args, statusFilter)
 		argCounter++
 	}
 
-	// Filter Facility
 	if facilityID != "" {
 		query += fmt.Sprintf(" AND b.facility_id = $%d", argCounter)
 		args = append(args, facilityID)
 		argCounter++
 	}
 
-	// Filter User
 	if userID != "" {
 		query += fmt.Sprintf(" AND b.user_id = $%d", argCounter)
 		args = append(args, userID)
 		argCounter++
 	}
 
-	query += " ORDER BY b.start_time DESC" // Urutkan berdasarkan waktu mulai
+	query += " ORDER BY b.start_time DESC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -301,6 +311,8 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 	var bookings []BookingResponse
 	for rows.Next() {
 		var b BookingResponse
+		var reviewedAt sql.NullTime // Variabel lokal untuk scan
+
 		if err := rows.Scan(
 			&b.ID, &b.User.ID, &b.User.Name, &b.User.Email,
 			&b.User.Profile.FullName, &b.User.Profile.PhoneNumber, &b.User.Profile.Address, &b.User.Profile.AvatarURL,
@@ -308,9 +320,16 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 			&b.FacilityID, &b.FacilityName, &b.StartTime, &b.EndTime, &b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus, &b.ActualEndTime,
 			&b.RejectionReason,
+			&b.ReviewComment, // [FIX] Scan field baru
+			&reviewedAt,      // [FIX] Scan field baru
 		); err != nil {
 			return nil, err
 		}
+
+		if reviewedAt.Valid {
+			b.ReviewedAt = &reviewedAt.Time
+		}
+
 		b.UserID = b.User.ID
 		b.UserName = b.User.Name
 		bookings = append(bookings, b)
@@ -365,7 +384,6 @@ func UpdateCheckIn(db *sql.DB, bookingID string) error {
 	return err
 }
 
-// UpdateCheckOut diperbarui untuk mendukung status kehadiran dan status 'completed'
 func UpdateCheckOut(db *sql.DB, bookingID string, attendanceStatus string) error {
 	_, err := db.Exec(`
 		UPDATE bookings 
@@ -379,7 +397,6 @@ func UpdateCheckOut(db *sql.DB, bookingID string, attendanceStatus string) error
 	return err
 }
 
-// GetConflictingBooking menggunakan logika Dynamic Availability (COALESCE)
 func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) (*time.Time, *time.Time, error) {
 	var conflictStart, conflictEnd time.Time
 	err := db.QueryRow(`
@@ -401,9 +418,7 @@ func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) 
 	return &conflictStart, &conflictEnd, nil
 }
 
-// ProcessExpiredBookings mengeksekusi Auto Check-out massal
 func ProcessExpiredBookings(db *sql.DB) error {
-	// 1. Proses No Show (Belum Check-in lewat end_time + 10m buffer)
 	_, err := db.Exec(`
 		UPDATE bookings 
 		SET status = 'completed', 
@@ -418,7 +433,6 @@ func ProcessExpiredBookings(db *sql.DB) error {
 		return err
 	}
 
-	// 2. Proses Late System (Sudah Check-in tapi lupa Check-out lewat end_time + 10m buffer)
 	_, err = db.Exec(`
 		UPDATE bookings 
 		SET status = 'completed', 
@@ -435,11 +449,13 @@ func ProcessExpiredBookings(db *sql.DB) error {
 	return err
 }
 
-// [DIPERBARUI] Helper function untuk scan rows (FindByUserID)
+// [PERBAIKAN] Helper function untuk scan rows, sekarang sinkron dengan SELECT
 func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 	var bookings []BookingResponse
 	for rows.Next() {
 		var b BookingResponse
+		var reviewedAt sql.NullTime // Variabel lokal untuk scan
+
 		if err := rows.Scan(
 			&b.ID, &b.User.ID, &b.User.Name, &b.User.Email,
 			&b.User.Profile.FullName, &b.User.Profile.IdentityNumber,
@@ -447,9 +463,16 @@ func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 			&b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus,
 			&b.RejectionReason,
+			&b.ReviewComment, // [FIX] Field ini sekarang diambil dari SELECT
+			&reviewedAt,      // [FIX] Field ini sekarang diambil dari SELECT
 		); err != nil {
 			return nil, err
 		}
+
+		if reviewedAt.Valid {
+			b.ReviewedAt = &reviewedAt.Time
+		}
+
 		b.UserID = b.User.ID
 		b.UserName = b.User.Name
 		bookings = append(bookings, b)
@@ -457,9 +480,7 @@ func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 	return bookings, nil
 }
 
-// GetAttendanceLogs mengambil data khusus untuk laporan kehadiran
 func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]BookingResponse, error) {
-	// Default: Ambil 30 hari terakhir jika tanggal kosong
 	if startDate == "" {
 		startDate = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
 	}
@@ -467,7 +488,6 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 		endDate = time.Now().Format("2006-01-02")
 	}
 
-	// Tambahkan waktu ke tanggal agar mencakup seluruh hari (00:00 - 23:59)
 	startQuery := startDate + " 00:00:00"
 	endQuery := endDate + " 23:59:59"
 
@@ -480,9 +500,9 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 			b.status::text, COALESCE(b.purpose, '-'), b.created_at,
 			COALESCE(admin.name, '') AS admin_name,
 			COALESCE(b.ticket_code, ''), b.is_checked_in, 
-			b.checked_in_at, -- Tambahan
+			b.checked_in_at, 
 			b.is_checked_out, 
-			b.checked_out_at, -- Tambahan
+			b.checked_out_at, 
 			COALESCE(b.attendance_status, ''),
 			b.actual_end_time
 		FROM bookings b
@@ -491,14 +511,13 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 		JOIN facilities f ON b.facility_id = f.id
 		LEFT JOIN users admin ON b.updated_by = admin.id
 		WHERE b.deleted_at IS NULL
-		  AND b.status IN ('approved', 'completed') -- Hanya yang relevan untuk kehadiran
+		  AND b.status IN ('approved', 'completed')
 		  AND b.start_time BETWEEN $1 AND $2
 	`
 
 	var args []interface{}
 	args = append(args, startQuery, endQuery)
 
-	// Filter Status Kehadiran (late, on_time, no_show)
 	if status != "" && status != "all" {
 		query += " AND b.attendance_status = $3"
 		args = append(args, status)
@@ -515,7 +534,7 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 	var bookings []BookingResponse
 	for rows.Next() {
 		var b BookingResponse
-		var checkedInAt, checkedOutAt sql.NullTime // Variabel scan lokal
+		var checkedInAt, checkedOutAt sql.NullTime
 
 		if err := rows.Scan(
 			&b.ID, &b.User.ID, &b.User.Name, &b.User.Email,
@@ -523,15 +542,14 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 			&b.FacilityID, &b.FacilityName, &b.StartTime, &b.EndTime,
 			&b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn,
-			&checkedInAt, // Scan ke variabel lokal dulu
+			&checkedInAt,
 			&b.IsCheckedOut,
-			&checkedOutAt, // Scan ke variabel lokal dulu
+			&checkedOutAt,
 			&b.AttendanceStatus, &b.ActualEndTime,
 		); err != nil {
 			return nil, err
 		}
 
-		// Mapping manual waktu checkin/out
 		if checkedInAt.Valid {
 			b.CheckedInAt = &checkedInAt.Time
 		}
@@ -539,7 +557,6 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 			b.CheckedOutAt = &checkedOutAt.Time
 		}
 
-		// Fallback nama user
 		if b.User.Profile.FullName != "" {
 			b.UserName = b.User.Profile.FullName
 		} else {

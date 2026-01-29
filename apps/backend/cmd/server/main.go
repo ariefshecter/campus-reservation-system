@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"time" // <--- Import time ditambahkan untuk Ticker
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -113,16 +113,25 @@ func main() {
 	// 7. BOOKING ROUTES
 	// ==========================
 	app.Post("/bookings", auth.JWTProtected(), auth.RequireRole("user"), booking.CreateHandler(db))
-	app.Get("/bookings/me", auth.JWTProtected(), auth.RequireRole("user"), booking.MyBookingsHandler(db))
 	app.Delete("/bookings/:id", auth.JWTProtected(), auth.RequireRole("user"), booking.CancelHandler(db))
 	app.Get("/bookings/:id/ticket", auth.JWTProtected(), booking.DownloadTicketHandler(db))
 	app.Get("/facilities/:id/schedule", auth.JWTProtected(), booking.GetFacilityScheduleHandler(db))
 	app.Get("/bookings/me", auth.JWTProtected(), auth.RequireRole("user"), booking.MyBookingsHandler(db))
+
+	// [BARU] Route User - Submit Review (User Only)
+	app.Post("/bookings/:id/review", auth.JWTProtected(), auth.RequireRole("user"), booking.SubmitReviewHandler(db))
+
+	// Admin Routes for Bookings
 	app.Get("/bookings", auth.JWTProtected(), auth.RequireRole("admin"), booking.ListAllHandler(db))
 	app.Patch("/bookings/:id/status", auth.JWTProtected(), auth.RequireRole("admin"), booking.UpdateStatusHandler(db))
+
+	// [BARU] Route Admin - List Reviews (Admin Only)
+	app.Get("/admin/reviews", auth.JWTProtected(), auth.RequireRole("admin"), booking.GetAdminReviewsHandler(db))
+
 	app.Post("/bookings/verify-ticket", auth.JWTProtected(), auth.RequireRole("admin"), booking.CheckInHandler(db))
 	app.Get("/admin/attendance", auth.JWTProtected(), auth.RequireRole("admin"), booking.GetAttendanceLogsHandler(db))
 	app.Get("/admin/attendance/export", auth.JWTProtected(), auth.RequireRole("admin"), booking.ExportAttendanceHandler(db))
+
 	// ==========================
 	// 8. USER ROUTES (ADMIN)
 	// ==========================

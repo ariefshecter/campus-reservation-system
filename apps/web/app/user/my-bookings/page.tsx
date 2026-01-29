@@ -13,7 +13,9 @@ import {
   Search, 
   UserCheck,
   Download,
-  MessageSquareWarning // [BARU] Icon untuk pesan penolakan
+  MessageSquareWarning,
+  MessageSquarePlus, // Icon untuk Beri Ulasan
+  Pencil // Icon untuk Edit Ulasan
 } from "lucide-react";
 
 import {
@@ -28,12 +30,17 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from "@/components/ui/dialog"; // [BARU] Import Dialog
+  DialogHeader,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea"; // Import Textarea
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
 
 /* =======================
    TYPES
@@ -53,7 +60,10 @@ type Booking = {
   is_checked_in?: boolean;
   is_checked_out?: boolean;
   attendance_status?: string;
-  rejection_reason?: string; // [BARU] Field alasan penolakan
+  rejection_reason?: string;
+  // [BARU] Field Ulasan
+  review_comment?: string;
+  reviewed_at?: string;
   // Field User & Profile dari Backend
   user: {
     name: string;
@@ -98,9 +108,15 @@ export default function MyBookingsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
 
-  // [BARU] State untuk Modal Pesan Penolakan
+  // State untuk Modal Pesan Penolakan
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState("");
+
+  // [BARU] State untuk Modal Review
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null);
+  const [reviewText, setReviewText] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // 1. Fetch Data
   const fetchBookings = async () => {
@@ -138,7 +154,7 @@ export default function MyBookingsPage() {
     }
   };
 
-  // 3. Logic Download Tiket GAMBAR (PNG)
+  // 3. Logic Download Tiket
   const downloadTicket = async (item: Booking) => {
     if (!item.ticket_code) {
       toast.error("Kode tiket tidak tersedia");
@@ -174,10 +190,48 @@ export default function MyBookingsPage() {
     }
   };
 
-  // [BARU] Handler Buka Pesan Penolakan
+  // Handler Buka Pesan Penolakan
   const openRejectionMessage = (reason?: string) => {
       setSelectedMessage(reason || "Tidak ada pesan khusus dari admin.");
       setMessageModalOpen(true);
+  };
+
+  // [BARU] Handler Buka Modal Review
+  const handleOpenReview = (item: Booking) => {
+    setReviewBookingId(item.id);
+    // Jika sudah ada review sebelumnya (Edit Mode), isi textarea
+    setReviewText(item.review_comment || "");
+    setReviewModalOpen(true);
+  };
+
+  // [BARU] Handler Submit Review
+  const submitReview = async () => {
+    if (!reviewBookingId) return;
+    if (!reviewText.trim()) {
+      toast.error("Ulasan tidak boleh kosong");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      await api.post(`/bookings/${reviewBookingId}/review`, {
+        comment: reviewText
+      });
+      
+      toast.success("Ulasan berhasil dikirim!");
+      setReviewModalOpen(false);
+      setReviewText("");
+      setReviewBookingId(null);
+      
+      // Refresh data agar tampilan terupdate
+      fetchBookings();
+    } catch (error) {
+      const err = error as AxiosError<{ error: string }>;
+      const msg = err.response?.data?.error || "Gagal mengirim ulasan";
+      toast.error(msg);
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   // 4. Filter Logic
@@ -193,15 +247,13 @@ export default function MyBookingsPage() {
     });
   }, [bookings, search, statusFilter]);
 
-  // 5. Helper Status Badge (UPDATED)
+  // 5. Helper Status Badge
   const renderStatus = (item: Booking) => {
-    // === HANDLING STATUS COMPLETED (SELESAI) ===
     if (item.status === "completed") {
       return (
         <div className="flex flex-col items-start gap-1.5">
           <Badge className="bg-slate-500 hover:bg-slate-600">Selesai</Badge>
           
-          {/* Badge Detail Kehadiran */}
           {item.attendance_status === "on_time" && (
             <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/10 text-[10px] h-5 px-1.5">
               Tepat Waktu
@@ -221,7 +273,6 @@ export default function MyBookingsPage() {
       );
     }
 
-    // === HANDLING STATUS LAINNYA ===
     let badge;
     switch (item.status) {
       case "approved":
@@ -237,7 +288,6 @@ export default function MyBookingsPage() {
         badge = <Badge className="bg-blue-500 hover:bg-blue-600">Menunggu</Badge>;
     }
 
-    // Tambahan info admin jika disetujui/ditolak
     if ((item.status === "approved" || item.status === "rejected") && item.admin_name) {
       return (
         <div className="flex flex-col items-start gap-1">
@@ -360,7 +410,7 @@ export default function MyBookingsPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           
-                          {/* [BARU] Tombol Lihat Pesan (Hanya muncul jika REJECTED) */}
+                          {/* Tombol Lihat Pesan (Rejected) */}
                           {item.status === "rejected" && (
                               <Button
                                 variant="ghost"
@@ -374,7 +424,29 @@ export default function MyBookingsPage() {
                               </Button>
                           )}
 
-                          {/* Tombol Tiket (Hanya untuk Approved/Completed) */}
+                          {/* [BARU] Tombol Ulasan (Hanya untuk Completed) */}
+                          {item.status === "completed" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenReview(item)}
+                              className={cn(
+                                "border-slate-700 bg-transparent hover:bg-slate-800",
+                                item.review_comment 
+                                  ? "text-blue-400 border-blue-500/30 hover:bg-blue-500/10" // Gaya jika sudah ada review (Edit)
+                                  : "text-slate-300" // Gaya default
+                              )}
+                              title={item.review_comment ? "Edit Ulasan" : "Beri Ulasan"}
+                            >
+                              {item.review_comment ? (
+                                <><Pencil className="mr-1 h-3 w-3" /> Edit</>
+                              ) : (
+                                <><MessageSquarePlus className="mr-1 h-3 w-3" /> Ulasan</>
+                              )}
+                            </Button>
+                          )}
+
+                          {/* Tombol Tiket (Approved/Completed) */}
                           {(item.status === "approved" || item.status === "completed") && item.ticket_code && (
                             <Button
                               variant="outline"
@@ -392,7 +464,7 @@ export default function MyBookingsPage() {
                             </Button>
                           )}
 
-                          {/* Tombol Batal (Hanya untuk Pending) */}
+                          {/* Tombol Batal (Pending) */}
                           {item.status === "pending" && (
                             <Button
                               variant="destructive"
@@ -419,7 +491,7 @@ export default function MyBookingsPage() {
         </Card>
       </div>
 
-      {/* [BARU] MODAL VIEW PESAN PENOLAKAN */}
+      {/* MODAL VIEW PESAN PENOLAKAN */}
        <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
           <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100">
              <DialogTitle className="flex items-center gap-2 text-red-400">
@@ -427,7 +499,6 @@ export default function MyBookingsPage() {
                 Alasan Penolakan
              </DialogTitle>
              
-             {/* PERBAIKAN: Menggunakan &quot; untuk menghindari error ESLint */}
              <div className="p-4 bg-red-950/30 text-red-200 rounded-lg border border-red-900/50 text-sm italic">
                 &quot;{selectedMessage}&quot;
              </div>
@@ -439,6 +510,50 @@ export default function MyBookingsPage() {
              </div>
           </DialogContent>
        </Dialog>
+
+      {/* [BARU] MODAL INPUT ULASAN */}
+      <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
+        <DialogContent className="sm:max-w-lg bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle>Ulasan Fasilitas</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Bagaimana pengalaman Anda menggunakan fasilitas ini? Masukan Anda sangat berarti bagi kami.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="review" className="text-slate-300">Komentar</Label>
+              <Textarea
+                id="review"
+                placeholder="Tulis ulasan Anda di sini... (misal: Ruangan bersih, AC dingin, proyektor berfungsi baik)"
+                className="bg-slate-950 border-slate-700 text-slate-200 placeholder:text-slate-600 min-h-[120px]"
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setReviewModalOpen(false)} 
+              className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+              disabled={isSubmittingReview}
+            >
+              Batal
+            </Button>
+            <Button 
+              onClick={submitReview} 
+              disabled={isSubmittingReview}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSubmittingReview && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Kirim Ulasan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

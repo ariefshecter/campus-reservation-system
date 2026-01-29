@@ -9,6 +9,7 @@ import {
   CalendarCheck, 
   LogOut, 
   Users, 
+  MessageSquareQuote, // [BARU] Icon untuk menu Ulasan
   QrCode,
   ClipboardList // <--- Icon baru untuk Log Kehadiran
 } from "lucide-react";
@@ -46,6 +47,11 @@ const menuItems = [
     title: "Scanner Tiket",
     href: "/admin/scanner",
     icon: QrCode,
+  },
+  {
+    title: "Ulasan", // [BARU] Menu Ulasan
+    href: "/admin/reviews",
+    icon: MessageSquareQuote,
   },
 ];
 

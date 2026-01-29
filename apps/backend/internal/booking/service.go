@@ -471,3 +471,46 @@ func GenerateExcelReport(bookings []BookingResponse, startDate, endDate string) 
 
 	return buf, nil
 }
+
+// ==========================
+// SUBMIT REVIEW (USER)
+// ==========================
+func SubmitReview(db *sql.DB, bookingID string, userID string, comment string) error {
+	// 1. Validasi Input
+	if strings.TrimSpace(comment) == "" {
+		return errors.New("ulasan tidak boleh kosong")
+	}
+
+	// 2. Cek status dan kepemilikan booking
+	status, owner, err := FindByID(db, bookingID)
+	if err != nil {
+		return errors.New("booking tidak ditemukan")
+	}
+
+	if owner != userID {
+		return errors.New("tidak punya hak memberikan ulasan untuk booking ini")
+	}
+
+	// 3. Pastikan status sudah Completed
+	// User hanya boleh memberi ulasan jika sudah selesai menggunakan fasilitas
+	if status != "completed" {
+		return errors.New("ulasan hanya dapat diberikan setelah penggunaan fasilitas selesai")
+	}
+
+	// 4. Panggil Repository untuk simpan/update (Edit Review)
+	// Karena menggunakan logika UPDATE di repository, fungsi ini otomatis mendukung fitur EDIT
+	if err := UpdateReview(db, bookingID, userID, comment); err != nil {
+		return errors.New("gagal menyimpan ulasan: " + err.Error())
+	}
+
+	return nil
+}
+
+// ==========================
+// GET ALL REVIEWS (ADMIN)
+// ==========================
+func GetAllReviews(db *sql.DB) ([]BookingResponse, error) {
+	// Menggunakan GetAll tanpa filter status, namun nantinya di Handler
+	// kita akan memastikan data yang ditampilkan hanya yang memiliki review_comment
+	return GetAll(db, "completed", "", "")
+}

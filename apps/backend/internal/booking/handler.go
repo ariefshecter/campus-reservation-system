@@ -32,6 +32,11 @@ type CheckInRequest struct {
 	TicketCode string `json:"ticket_code"`
 }
 
+// [BARU] Struct untuk input ulasan
+type SubmitReviewRequest struct {
+	Comment string `json:"comment"`
+}
+
 // ========================================================
 // HANDLER: CREATE BOOKING (USER)
 // ========================================================
@@ -364,5 +369,52 @@ func ExportAttendanceHandler(db *sql.DB) fiber.Handler {
 		c.Set("Content-Disposition", "attachment; filename="+filename)
 
 		return c.SendStream(bytes.NewReader(fileBuffer.Bytes()))
+	}
+}
+
+// ========================================================
+// HANDLER: REVIEWS
+// ========================================================
+
+// SubmitReviewHandler - User mengirim atau mengedit ulasan
+func SubmitReviewHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		bookingID := c.Params("id")
+		userID := c.Locals("user_id").(string)
+
+		var req SubmitReviewRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Format request tidak valid",
+			})
+		}
+
+		if err := SubmitReview(db, bookingID, userID, req.Comment); err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"message": "Ulasan berhasil dikirim",
+		})
+	}
+}
+
+// GetAdminReviewsHandler - Admin melihat semua ulasan
+func GetAdminReviewsHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		reviews, err := GetAllReviews(db)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Gagal memuat data ulasan",
+			})
+		}
+
+		if reviews == nil {
+			reviews = []BookingResponse{}
+		}
+
+		return c.JSON(reviews)
 	}
 }
