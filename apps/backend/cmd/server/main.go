@@ -61,38 +61,61 @@ func main() {
 		return c.SendString("Backend Campus Reservation System is Running...")
 	})
 
+	// AUTH STANDARD (EMAIL & PASS)
 	app.Post("/auth/register", auth.RegisterHandler(db))
 	app.Post("/auth/login", auth.LoginHandler(db))
+
+	// AUTH OTP (WHATSAPP) - [BARU]
+	// Login Flow
+	app.Post("/auth/login/request-otp", auth.RequestLoginOTPHandler(db))
+	app.Post("/auth/login/verify-otp", auth.VerifyLoginOTPHandler(db))
+
+	// Register Flow
+	app.Post("/auth/register/request-otp", auth.RequestRegisterOTPHandler(db))
+	app.Post("/auth/register/verify-otp", auth.VerifyRegisterOTPHandler(db))
 
 	// ==========================
 	// 5. PROTECTED ROUTES (JWT)
 	// ==========================
 
 	// [DIPERBARUI] Endpoint /me sekarang mengambil avatar dari Profile
+	// [DIPERBARUI] Endpoint /me dengan Safety Check
 	app.Get("/me", auth.JWTProtected(), func(c *fiber.Ctx) error {
-		userID := c.Locals("user_id").(string)
+		userVal := c.Locals("user_id")
 
-		// 1. Ambil data akun utama (email, role, nama user)
+		if userVal == nil {
+			log.Println("[DEBUG /me] Token valid tapi userVal nil") // <--- LOG 1
+			return c.Status(401).JSON(fiber.Map{"error": "Token valid tapi user_id tidak ditemukan"})
+		}
+
+		userID, ok := userVal.(string)
+		if !ok {
+			log.Println("[DEBUG /me] Gagal casting userVal ke string:", userVal) // <--- LOG 2
+			return c.Status(400).JSON(fiber.Map{"error": "Format user_id salah"})
+		}
+
+		// LOG PENTING: Bandingkan ID ini dengan yang ada di Database
+		log.Printf("[DEBUG /me] Mencari User ID: '%s'", userID) // <--- LOG 3
+
 		userData, err := user.FindByID(db, userID)
 		if err != nil {
+			log.Printf("[DEBUG /me] User.FindByID Gagal: %v", err) // <--- LOG 4
 			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
 		}
 
-		// 2. Ambil data profile (untuk dapat avatar_url)
-		// Kita gunakan variabel temporary untuk avatar
+		// ... kode sisanya (avatar dll) ...
 		avatarURL := ""
 		profileData, err := profile.GetByUserID(db, userID)
 		if err == nil && profileData != nil {
 			avatarURL = profileData.AvatarURL
 		}
 
-		// 3. Return gabungan data User + Avatar
 		return c.JSON(fiber.Map{
 			"id":         userData.ID,
 			"name":       userData.Name,
 			"email":      userData.Email,
 			"role":       userData.Role,
-			"avatar_url": avatarURL, // <--- Ini yang dicari frontend!
+			"avatar_url": avatarURL,
 		})
 	})
 
