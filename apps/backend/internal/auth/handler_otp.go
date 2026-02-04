@@ -6,15 +6,58 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// POST /auth/login/request-otp
+// ==========================================
+// DEFINISI STRUCT UNTUK SWAGGER & HANDLER
+// ==========================================
+
+// RequestOTPReq digunakan untuk payload request OTP (Login & Register)
+type RequestOTPReq struct {
+	Phone string `json:"phone" example:"08123456789"`
+}
+
+// VerifyLoginReq digunakan untuk verifikasi Login
+type VerifyLoginReq struct {
+	Phone string `json:"phone" example:"08123456789"`
+	Code  string `json:"code" example:"123456"`
+}
+
+// VerifyRegisterReq digunakan untuk verifikasi Register (Lengkap dengan Password)
+type VerifyRegisterReq struct {
+	Phone    string `json:"phone" example:"08123456789"`
+	Code     string `json:"code" example:"123456"`
+	Name     string `json:"name" example:"Budi Santoso"`
+	Password string `json:"password" example:"rahasia123"`
+}
+
+// ==========================================
+// HANDLER FUNCTIONS
+// ==========================================
+
+// RequestLoginOTPHandler meminta kode OTP untuk Login
+// @Summary      Request OTP Login (WA)
+// @Description  Mengirimkan kode OTP ke WhatsApp user yang SUDAH terdaftar.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body RequestOTPReq true "Nomor WhatsApp"
+// @Success      200  {object} map[string]string "OTP Terkirim"
+// @Failure      400  {object} map[string]string "Error Validasi"
+// @Router       /auth/login/request-otp [post]
 func RequestLoginOTPHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var req RequestOTPRequest
+		var req RequestOTPReq
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 		}
 
-		if err := RequestOTP(db, req, "login"); err != nil {
+		// Parameter ke-3 "login" menandakan ini untuk flow login
+		// Asumsi: Fungsi RequestOTP ada di service_otp.go dan menerima struct yang sesuai
+		// Kita mapping manual ke struct yang diharapkan service jika beda,
+		// tapi disini kita asumsikan RequestOTP menerima interface/struct serupa.
+		// Jika RequestOTP butuh struct spesifik 'RequestOTPRequest', kita mapping:
+		serviceReq := RequestOTPRequest{Phone: req.Phone}
+
+		if err := RequestOTP(db, serviceReq, "login"); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -22,15 +65,28 @@ func RequestLoginOTPHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// POST /auth/login/verify-otp
+// VerifyLoginOTPHandler memverifikasi OTP Login
+// @Summary      Verifikasi OTP Login (WA)
+// @Description  Tukar kode OTP dengan Token JWT.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body VerifyLoginReq true "Data Verifikasi"
+// @Success      200  {object} map[string]string "Token JWT"
+// @Failure      400  {object} map[string]string "Invalid Request"
+// @Failure      401  {object} map[string]string "OTP Salah/Expired"
+// @Router       /auth/login/verify-otp [post]
 func VerifyLoginOTPHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var req VerifyOTPRequest
+		var req VerifyLoginReq
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 		}
 
-		res, err := VerifyLoginOTP(db, req)
+		// Mapping ke struct service
+		serviceReq := VerifyOTPRequest{Phone: req.Phone, Code: req.Code}
+
+		res, err := VerifyLoginOTP(db, serviceReq)
 		if err != nil {
 			return c.Status(401).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -39,18 +95,27 @@ func VerifyLoginOTPHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// POST /auth/register/request-otp
+// RequestRegisterOTPHandler meminta OTP untuk Register
+// @Summary      Request OTP Register (WA)
+// @Description  Mengirimkan kode OTP ke nomor baru untuk pendaftaran.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body RequestOTPReq true "Nomor WhatsApp"
+// @Success      200  {object} map[string]string "OTP Terkirim"
+// @Failure      400  {object} map[string]string "Error (Misal: Nomor sudah ada)"
+// @Router       /auth/register/request-otp [post]
 func RequestRegisterOTPHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var req RequestOTPRequest
+		var req RequestOTPReq
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 		}
 
-		// Untuk register, nama wajib diisi di awal (atau bisa di step verify, tergantung flow UI)
-		// Disini kita validasi phone saja dulu
+		// Mapping ke struct service
+		serviceReq := RequestOTPRequest{Phone: req.Phone}
 
-		if err := RequestOTP(db, req, "register"); err != nil {
+		if err := RequestOTP(db, serviceReq, "register"); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 
@@ -58,16 +123,18 @@ func RequestRegisterOTPHandler(db *sql.DB) fiber.Handler {
 	}
 }
 
-// POST /auth/register/verify-otp
+// VerifyRegisterOTPHandler memverifikasi OTP & Buat User
+// @Summary      Verifikasi OTP Register (WA)
+// @Description  Verifikasi OTP sekaligus membuat user baru dengan password.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body VerifyRegisterReq true "Data Register Lengkap"
+// @Success      201  {object} map[string]string "User Created & Token"
+// @Failure      400  {object} map[string]string "Validasi Gagal"
+// @Router       /auth/register/verify-otp [post]
 func VerifyRegisterOTPHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// [UPDATE] Tambah field Password
-		type VerifyRegisterReq struct {
-			Phone    string `json:"phone"`
-			Code     string `json:"code"`
-			Name     string `json:"name"`
-			Password string `json:"password"` // <--- Field Baru
-		}
 		var req VerifyRegisterReq
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
@@ -81,9 +148,9 @@ func VerifyRegisterOTPHandler(db *sql.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"error": "Password minimal 6 karakter"})
 		}
 
-		// Panggil Service dengan parameter password
+		// Panggil Service
 		serviceReq := VerifyOTPRequest{Phone: req.Phone, Code: req.Code}
-		// Perhatikan kita kirim req.Password ke service
+
 		res, err := VerifyRegisterOTP(db, serviceReq, req.Name, req.Password)
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})

@@ -1,0 +1,175 @@
+basePath: /
+definitions:
+  auth.RequestOTPReq:
+    properties:
+      phone:
+        example: "08123456789"
+        type: string
+    type: object
+  auth.VerifyLoginReq:
+    properties:
+      code:
+        example: "123456"
+        type: string
+      phone:
+        example: "08123456789"
+        type: string
+    type: object
+  auth.VerifyRegisterReq:
+    properties:
+      code:
+        example: "123456"
+        type: string
+      name:
+        example: Budi Santoso
+        type: string
+      password:
+        example: rahasia123
+        type: string
+      phone:
+        example: "08123456789"
+        type: string
+    type: object
+host: localhost:3000
+info:
+  contact:
+    email: support@unu.ac.id
+    name: Tim Developer
+  description: Dokumentasi API untuk Sistem Reservasi Kampus (UniSpace).
+  termsOfService: http://swagger.io/terms/
+  title: Campus Reservation API
+  version: "1.0"
+paths:
+  /auth/login/request-otp:
+    post:
+      consumes:
+      - application/json
+      description: Mengirimkan kode OTP ke WhatsApp user yang SUDAH terdaftar.
+      parameters:
+      - description: Nomor WhatsApp
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RequestOTPReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OTP Terkirim
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Error Validasi
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Request OTP Login (WA)
+      tags:
+      - Auth WhatsApp
+  /auth/login/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Tukar kode OTP dengan Token JWT.
+      parameters:
+      - description: Data Verifikasi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyLoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token JWT
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: OTP Salah/Expired
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verifikasi OTP Login (WA)
+      tags:
+      - Auth WhatsApp
+  /auth/register/request-otp:
+    post:
+      consumes:
+      - application/json
+      description: Mengirimkan kode OTP ke nomor baru untuk pendaftaran.
+      parameters:
+      - description: Nomor WhatsApp
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RequestOTPReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OTP Terkirim
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'Error (Misal: Nomor sudah ada)'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Request OTP Register (WA)
+      tags:
+      - Auth WhatsApp
+  /auth/register/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verifikasi OTP sekaligus membuat user baru dengan password.
+      parameters:
+      - description: Data Register Lengkap
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyRegisterReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User Created & Token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Validasi Gagal
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verifikasi OTP Register (WA)
+      tags:
+      - Auth WhatsApp
+securityDefinitions:
+  BearerAuth:
+    description: Masukkan token dengan format "Bearer <token_anda>"
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
