@@ -40,15 +40,30 @@ export default function UserLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
+  // =========================================================
+  // 1. GATEKEEPER & DATA FETCHING
+  // =========================================================
   useEffect(() => {
+    // [FIX] Cek Token di LocalStorage terlebih dahulu (Optimistic Check)
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.replace("/login"); // Redirect paksa jika tidak ada token
+      return;
+    }
+
     api
-      .get<User>("/me") // Pastikan endpoint ini benar
+      .get<User>("/me") 
       .then((res) => {
-        console.log("🔥 [DEBUG] DATA USER:", res.data);
+        console.log(" [DEBUG] DATA USER:", res.data);
         setUser(res.data);
       })
       .catch((err) => {
         console.error("Gagal load user:", err);
+        // [FIX] Jika API gagal (misal token expired/401), paksa logout & redirect
+        localStorage.removeItem("token");
+        
+        // Gunakan replace agar halaman error tidak masuk history
+        router.replace("/login"); 
       });
   }, [router]);
 
@@ -57,44 +72,42 @@ export default function UserLayout({ children }: { children: ReactNode }) {
       ? "text-white bg-white/10 shadow-sm border border-white/5"
       : "text-slate-400 hover:text-white hover:bg-white/5";
 
+  // =========================================================
+  // 2. HANDLE LOGOUT (ANTI-BACK BUTTON)
+  // =========================================================
   const handleLogout = () => {
+    // Hapus data sesi
     localStorage.removeItem("token");
-    router.push("/login");
+    document.cookie = `token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+
+    // [FIX] Gunakan window.location.replace() alih-alih router.push()
+    // Ini akan MENGGANTI entry history saat ini dengan halaman login.
+    // Efeknya: Saat user klik tombol Back di browser, mereka tidak akan kembali ke Dashboard.
+    window.location.replace("/login");
   };
 
   const getInitials = (name: string) => {
     return name
-      .split(" ")
-      .map((n) => n[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
+      ? name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
+      : "U";
   };
 
-  // UPDATE 2: Logika URL Gambar yang disesuaikan dengan format database Anda
+  // UPDATE 2: Logika URL Gambar
   const resolveImageUrl = () => {
     if (!user) return undefined;
 
-    // Prioritaskan 'avatar_url' karena itu nama kolom di DB Anda
     const rawUrl = user.avatar_url || user.photo_url || user.photo || user.image || user.avatar;
 
     if (!rawUrl || rawUrl === "") return undefined;
 
-    // Jika sudah full URL (misal dari Google Login)
     if (rawUrl.startsWith("http") || rawUrl.startsWith("https")) return rawUrl;
 
-    // Bersihkan path Windows (\ jadi /)
     let cleanPath = rawUrl.replace(/\\/g, "/");
 
-    // Pastikan tidak ada double slash di awal
     if (cleanPath.startsWith("/")) {
       cleanPath = cleanPath.slice(1);
     }
-
-    // Database Anda menyimpan: /uploads/namafile.png
-    // Jadi cleanPath sekarang: uploads/namafile.png
     
-    // Gabungkan dengan Backend URL
     return `${BACKEND_URL}/${cleanPath}`;
   };
 
@@ -109,7 +122,6 @@ export default function UserLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-10">
             <Link href="/user/dashboard" className="flex items-center gap-3 group">
               <div className="relative h-10 w-10 shrink-0 transition-transform group-hover:scale-105">
-                 {/* Pastikan file logo.png ada di folder public/ */}
                  <Image 
                    src="/logo.png" 
                    alt="UniSpace Logo" 

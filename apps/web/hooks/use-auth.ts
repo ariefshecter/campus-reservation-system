@@ -29,7 +29,6 @@ interface AuthState {
 
   // Actions OTP Register
   requestRegisterOTP: (phone: string) => Promise<boolean>
-  // [UPDATE] Menambahkan parameter password
   verifyRegisterOTP: (phone: string, code: string, name: string, password: string) => Promise<boolean>
 }
 
@@ -49,17 +48,25 @@ export const useAuth = create<AuthState>()(
         document.cookie = `token=${token}; path=/; max-age=86400; SameSite=Lax`
         
         // 2. Simpan ke LocalStorage MANUAL (Synchronous) - PENTING!
-        // Ini agar Axios Interceptor langsung bisa membaca token tanpa menunggu proses async Zustand
         localStorage.setItem("token", token) 
         
         set({ token, user })
       },
 
       logout: () => {
+        // 1. Hapus Cookie
         document.cookie = `token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT`
-        localStorage.removeItem("token") // Hapus manual
+        
+        // 2. Hapus LocalStorage
+        localStorage.removeItem("token") 
+        
+        // 3. Reset State Zustand
         set({ token: null, user: null })
-        window.location.href = '/login'
+        
+        // [FIX] Gunakan replace() alih-alih href/assign.
+        // Ini mengganti entry history 'Dashboard' dengan 'Login'.
+        // Sehingga jika user klik tombol Back browser, mereka tidak akan kembali ke Dashboard.
+        window.location.replace('/login')
       },
 
       fetchUser: async () => {
@@ -98,10 +105,10 @@ export const useAuth = create<AuthState>()(
           
           const token = res.data.token
           
-          // Panggil fungsi login (Save Token manual)
+          // Panggil fungsi login
           get().login(token, null) 
 
-          // Beri jeda 100ms agar browser yakin token sudah ada di storage sebelum request /me
+          // Beri jeda agar token terbaca
           await new Promise(resolve => setTimeout(resolve, 100));
 
           await get().fetchUser()
@@ -135,19 +142,15 @@ export const useAuth = create<AuthState>()(
         }
       },
 
-      // [UPDATE] Menerima parameter password
       verifyRegisterOTP: async (phone, code, name, password) => {
         set({ isLoading: true })
         try {
-          // Kirim data lengkap ke backend
           const res = await api.post('/auth/register/verify-otp', { phone, code, name, password })
           
           const token = res.data.token
           
-          // Login otomatis setelah register sukses
           get().login(token, null)
           
-          // Jeda safety
           await new Promise(resolve => setTimeout(resolve, 100));
           
           await get().fetchUser()
@@ -166,7 +169,6 @@ export const useAuth = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      // Kita tidak menyimpan state isLoading ke localStorage
       partialize: (state) => ({ token: state.token, user: state.user }),
     }
   )

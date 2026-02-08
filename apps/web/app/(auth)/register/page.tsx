@@ -45,7 +45,18 @@ export default function RegisterPage() {
 
   // --- HANDLER EMAIL ---
   const handleChangeEmail = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+
+    // [UBAH DISINI] Validasi Anti-XSS untuk Username
+    // Hanya membolehkan Huruf (a-z, A-Z), Angka (0-9), dan Spasi
+    if (name === "name") {
+      // Regex: Ganti semua karakter KECUALI huruf, angka, dan spasi dengan string kosong
+      const cleanValue = value.replace(/[^a-zA-Z0-9 ]/g, "")
+      setFormData({ ...formData, [name]: cleanValue })
+      return
+    }
+
+    setFormData({ ...formData, [name]: value })
   }
 
   const handleRegisterEmail = async (e: React.FormEvent) => {
@@ -74,6 +85,13 @@ export default function RegisterPage() {
   const handleChangeWa = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
 
+    // [UBAH DISINI] Validasi Anti-XSS untuk Username WA
+    if (name === "name") {
+        const cleanValue = value.replace(/[^a-zA-Z0-9 ]/g, "")
+        setWaData({ ...waData, [name]: cleanValue })
+        return
+    }
+
     // [MODIFIKASI] Validasi Khusus: Phone hanya boleh ANGKA
     if (name === "phone") {
         // Regex: Ganti semua karakter yang BUKAN angka (\D) dengan string kosong
@@ -82,7 +100,7 @@ export default function RegisterPage() {
         return
     }
 
-    // Default behavior untuk input lain (name, otp, password)
+    // Default behavior untuk input lain (otp, password)
     setWaData({ ...waData, [name]: value })
   }
 
