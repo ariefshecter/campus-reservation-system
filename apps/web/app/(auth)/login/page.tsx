@@ -87,8 +87,24 @@ function LoginContent() {
   }
 
   // --- HANDLER WHATSAPP ---
+
+  // [MODIFIKASI] Validasi Input hanya Angka
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    // Hapus karakter non-angka
+    const numericValue = value.replace(/\D/g, "")
+    setPhone(numericValue)
+  }
+
   const handleRequestOTP = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // [MODIFIKASI] Validasi Panjang Nomor
+    if (phone.length < 10) {
+        toast.error("Nomor WhatsApp tidak valid (terlalu pendek)")
+        return
+    }
+
     // Panggil fungsi dari useAuth
     const success = await requestLoginOTP(phone)
     if (success) setOtpStep("OTP")
@@ -220,7 +236,7 @@ function LoginContent() {
                     type="tel" 
                     placeholder="Contoh: 08123456789"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={handlePhoneChange} // Menggunakan handler baru
                     required 
                     className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-green-500"
                   />

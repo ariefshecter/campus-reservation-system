@@ -24,7 +24,7 @@ type CreateBookingRequest struct {
 
 type UpdateStatusRequest struct {
 	Status          string `json:"status"`
-	RejectionReason string `json:"rejection_reason"` // [BARU] Field untuk alasan penolakan
+	RejectionReason string `json:"rejection_reason"`
 }
 
 // Request untuk Scan QR (Digunakan untuk In dan Out)
@@ -32,7 +32,7 @@ type CheckInRequest struct {
 	TicketCode string `json:"ticket_code"`
 }
 
-// [BARU] Struct untuk input ulasan
+// Struct untuk input ulasan
 type SubmitReviewRequest struct {
 	Comment string `json:"comment"`
 }
@@ -146,8 +146,7 @@ func CheckInHandler(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		// Karena Service mengembalikan nil jika sukses tepat waktu,
-		// Kita perlu cek status terakhir untuk menentukan pesan sukses.
+		// Ambil data booking untuk menentukan pesan Check-In atau Check-Out
 		booking, _ := FindByTicketCode(db, req.TicketCode)
 
 		message := "Check-In Berhasil! Silakan masuk ke ruangan."
@@ -166,7 +165,7 @@ func CheckInHandler(db *sql.DB) fiber.Handler {
 }
 
 // ========================================================
-// HANDLER LAIN TETAP
+// HANDLER : USER BOOKINGS (MY BOOKINGS)
 // ========================================================
 
 func MyBookingsHandler(db *sql.DB) fiber.Handler {

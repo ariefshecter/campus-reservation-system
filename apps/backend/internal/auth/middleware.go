@@ -37,7 +37,7 @@ func JWTProtected() fiber.Handler {
 
 		// 3. Parse JWT
 		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-			// Pastikan algoritma sesuai
+
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fiber.ErrUnauthorized
 			}
@@ -69,7 +69,7 @@ func JWTProtected() fiber.Handler {
 // ==========================
 // ROLE-BASED ACCESS CONTROL
 // ==========================
-// Contoh: AdminOnly(), UserOnly()
+
 func RequireRole(requiredRole string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		role := c.Locals("role")

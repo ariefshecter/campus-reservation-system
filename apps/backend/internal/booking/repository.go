@@ -94,7 +94,7 @@ type ScheduleResponse struct {
 // REPOSITORY FUNCTIONS
 // ========================================================
 
-// Fungsi untuk mengambil jadwal berdasarkan Facility ID (Aman untuk publik)
+// Fungsi untuk mengambil jadwal berdasarkan Facility ID
 func GetScheduleByFacility(db *sql.DB, facilityID string) ([]ScheduleResponse, error) {
 	rows, err := db.Query(`
 		SELECT 
@@ -132,6 +132,7 @@ func GetScheduleByFacility(db *sql.DB, facilityID string) ([]ScheduleResponse, e
 	return schedules, nil
 }
 
+// Func to insert new booking
 func Insert(db *sql.DB, b Booking) error {
 	_, err := db.Exec(`
 		INSERT INTO bookings (id, user_id, facility_id, start_time, end_time, purpose, status, created_by, created_at)
@@ -140,11 +141,13 @@ func Insert(db *sql.DB, b Booking) error {
 	return err
 }
 
+// Func to find booking by ID
 func FindByID(db *sql.DB, id string) (status string, ownerID string, err error) {
 	err = db.QueryRow(`SELECT status, user_id FROM bookings WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&status, &ownerID)
 	return
 }
 
+// Func to find detailed booking by ID
 func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	var b BookingResponse
 	var actualEndTime sql.NullTime
@@ -186,6 +189,7 @@ func FindDetailByID(db *sql.DB, bookingID string) (*BookingResponse, error) {
 	return &b, nil
 }
 
+// UpdateStatus memperbarui status booking beserta alasan penolakan dan kode tiket jika ada
 func UpdateStatus(db *sql.DB, bookingID string, status string, rejectionReason string, adminID string, ticketCode string) error {
 	var ticketCodeVal interface{} = ticketCode
 	if ticketCode == "" {
@@ -209,6 +213,7 @@ func UpdateStatus(db *sql.DB, bookingID string, status string, rejectionReason s
 	return err
 }
 
+// UpdateStatusCancel memperbarui status booking menjadi 'canceled' oleh user
 func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 	_, err := db.Exec(`UPDATE bookings SET status = 'canceled', updated_at = NOW(), updated_by = $1 WHERE id = $2 AND user_id = $1 AND deleted_at IS NULL`, userID, bookingID)
 	return err
@@ -225,7 +230,7 @@ func UpdateReview(db *sql.DB, bookingID string, userID string, comment string) e
 	return err
 }
 
-// [PERBAIKAN] Menambahkan kolom review_comment dan reviewed_at pada SELECT
+// Menambahkan kolom review_comment dan reviewed_at pada SELECT
 func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	rows, err := db.Query(`
 		SELECT
@@ -257,7 +262,7 @@ func FindByUserID(db *sql.DB, userID string) ([]BookingResponse, error) {
 	return scanBookings(rows)
 }
 
-// [PERBAIKAN] Menambahkan kolom review_comment dan reviewed_at pada SELECT
+// Menambahkan kolom review_comment dan reviewed_at pada SELECT
 func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingResponse, error) {
 	query := `
 		SELECT
@@ -320,8 +325,8 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 			&b.FacilityID, &b.FacilityName, &b.StartTime, &b.EndTime, &b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus, &b.ActualEndTime,
 			&b.RejectionReason,
-			&b.ReviewComment, // [FIX] Scan field baru
-			&reviewedAt,      // [FIX] Scan field baru
+			&b.ReviewComment,
+			&reviewedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -337,6 +342,7 @@ func GetAll(db *sql.DB, statusFilter, facilityID, userID string) ([]BookingRespo
 	return bookings, nil
 }
 
+// FindByTicketCode mencari booking berdasarkan kode tiket
 func FindByTicketCode(db *sql.DB, code string) (*BookingResponse, error) {
 	var b BookingResponse
 	var checkedInAt, checkedOutAt, actualEndTime sql.NullTime
@@ -379,11 +385,13 @@ func FindByTicketCode(db *sql.DB, code string) (*BookingResponse, error) {
 	return &b, nil
 }
 
+// UpdateCheckIn memperbarui status check-in booking
 func UpdateCheckIn(db *sql.DB, bookingID string) error {
 	_, err := db.Exec(`UPDATE bookings SET is_checked_in = true, checked_in_at = NOW() WHERE id = $1`, bookingID)
 	return err
 }
 
+// UpdateCheckOut memperbarui status check-out booking beserta status kehadiran
 func UpdateCheckOut(db *sql.DB, bookingID string, attendanceStatus string) error {
 	_, err := db.Exec(`
 		UPDATE bookings 
@@ -397,6 +405,7 @@ func UpdateCheckOut(db *sql.DB, bookingID string, attendanceStatus string) error
 	return err
 }
 
+// GetConflictingBooking memeriksa apakah ada booking yang bentrok dalam rentang waktu tertentu
 func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) (*time.Time, *time.Time, error) {
 	var conflictStart, conflictEnd time.Time
 	err := db.QueryRow(`
@@ -418,6 +427,7 @@ func GetConflictingBooking(db *sql.DB, facilityID string, start, end time.Time) 
 	return &conflictStart, &conflictEnd, nil
 }
 
+// ProcessExpiredBookings memperbarui booking yang sudah lewat end_time
 func ProcessExpiredBookings(db *sql.DB) error {
 	_, err := db.Exec(`
 		UPDATE bookings 
@@ -449,7 +459,7 @@ func ProcessExpiredBookings(db *sql.DB) error {
 	return err
 }
 
-// [PERBAIKAN] Helper function untuk scan rows, sekarang sinkron dengan SELECT
+// Helper function untuk scan multiple bookings
 func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 	var bookings []BookingResponse
 	for rows.Next() {
@@ -463,8 +473,8 @@ func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 			&b.Status, &b.Purpose, &b.CreatedAt, &b.AdminName,
 			&b.TicketCode, &b.IsCheckedIn, &b.IsCheckedOut, &b.AttendanceStatus,
 			&b.RejectionReason,
-			&b.ReviewComment, // [FIX] Field ini sekarang diambil dari SELECT
-			&reviewedAt,      // [FIX] Field ini sekarang diambil dari SELECT
+			&b.ReviewComment,
+			&reviewedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -480,6 +490,7 @@ func scanBookings(rows *sql.Rows) ([]BookingResponse, error) {
 	return bookings, nil
 }
 
+// GetAttendanceLogs mengambil log kehadiran dalam rentang tanggal tertentu dengan filter status
 func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]BookingResponse, error) {
 	if startDate == "" {
 		startDate = time.Now().AddDate(0, 0, -30).Format("2006-01-02")

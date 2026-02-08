@@ -50,11 +50,6 @@ func RequestLoginOTPHandler(db *sql.DB) fiber.Handler {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 		}
 
-		// Parameter ke-3 "login" menandakan ini untuk flow login
-		// Asumsi: Fungsi RequestOTP ada di service_otp.go dan menerima struct yang sesuai
-		// Kita mapping manual ke struct yang diharapkan service jika beda,
-		// tapi disini kita asumsikan RequestOTP menerima interface/struct serupa.
-		// Jika RequestOTP butuh struct spesifik 'RequestOTPRequest', kita mapping:
 		serviceReq := RequestOTPRequest{Phone: req.Phone}
 
 		if err := RequestOTP(db, serviceReq, "login"); err != nil {

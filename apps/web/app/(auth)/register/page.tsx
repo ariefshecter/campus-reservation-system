@@ -70,14 +70,32 @@ export default function RegisterPage() {
     }
   }
 
-  // --- HANDLER WHATSAPP ---
+  // --- HANDLER WHATSAPP (DIMODIFIKASI) ---
   const handleChangeWa = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setWaData({ ...waData, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+
+    // [MODIFIKASI] Validasi Khusus: Phone hanya boleh ANGKA
+    if (name === "phone") {
+        // Regex: Ganti semua karakter yang BUKAN angka (\D) dengan string kosong
+        const numericValue = value.replace(/\D/g, "")
+        setWaData({ ...waData, [name]: numericValue })
+        return
+    }
+
+    // Default behavior untuk input lain (name, otp, password)
+    setWaData({ ...waData, [name]: value })
   }
 
   // Langkah 1: Kirim OTP
   const handleRequestOTP = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // [MODIFIKASI] Validasi Panjang Nomor Sederhana
+    if (waData.phone.length < 10) {
+        toast.error("Nomor WhatsApp tidak valid (terlalu pendek)")
+        return
+    }
+
     const success = await requestRegisterOTP(waData.phone)
     if (success) setOtpStep("OTP")
   }
@@ -166,7 +184,7 @@ export default function RegisterPage() {
                       id="waPhone" 
                       name="phone" 
                       type="tel"
-                      placeholder="08xxxxxxxx" 
+                      placeholder="Contoh: 081234567890" 
                       required 
                       className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-green-500"
                       value={waData.phone}

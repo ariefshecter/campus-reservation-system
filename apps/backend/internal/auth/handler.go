@@ -63,12 +63,11 @@ func LoginHandler(db *sql.DB) fiber.Handler {
 }
 
 // ==========================
-// ME HANDLER (GET PROFILE) - BARU
+// ME HANDLER (GET PROFILE)
 // ==========================
 func MeHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// 1. Ambil User dari Token JWT (disimpan oleh middleware di c.Locals)
-		// Pastikan middleware JWT Anda menggunakan key default "user"
 		userToken := c.Locals("user").(*jwt.Token)
 		claims := userToken.Claims.(jwt.MapClaims)
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -30,7 +31,47 @@ func Register(db *sql.DB, req RegisterRequest) error {
 		return errors.New("password minimal 6 karakter")
 	}
 
-	// 2. Hash password
+	// ---------------------------------------------------------
+	// 1. CEK DUPLIKASI TERLEBIH DAHULU (LOGIKA BARU)
+	// ---------------------------------------------------------
+	// Kita cari apakah ada user dengan nama ATAU email yang sama
+	rows, err := db.Query("SELECT name, email FROM users WHERE name = $1 OR email = $2", req.Name, req.Email)
+	if err != nil {
+		return errors.New("terjadi kesalahan server saat pengecekan data")
+	}
+	defer rows.Close()
+
+	var nameExists, emailExists bool
+
+	// Loop hasilnya (bisa jadi ada 1 baris yang sama persis, atau 2 baris beda user)
+	for rows.Next() {
+		var dbName, dbEmail string
+		if err := rows.Scan(&dbName, &dbEmail); err == nil {
+			if dbName == req.Name {
+				nameExists = true
+			}
+			if dbEmail == req.Email {
+				emailExists = true
+			}
+		}
+	}
+
+	// Tentukan pesan error berdasarkan kondisi
+	if nameExists && emailExists {
+		return errors.New("username dan email sudah terdaftar")
+	}
+	if nameExists {
+		return errors.New("username sudah terdaftar")
+	}
+	if emailExists {
+		return errors.New("email sudah terdaftar")
+	}
+
+	// ---------------------------------------------------------
+	// 2. JIKA AMAN, LANJUTKAN PROSES HASHING & INSERT
+	// ---------------------------------------------------------
+
+	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword(
 		[]byte(req.Password),
 		bcrypt.DefaultCost,
@@ -39,8 +80,7 @@ func Register(db *sql.DB, req RegisterRequest) error {
 		return errors.New("gagal mengenkripsi password")
 	}
 
-	// 3. Simpan ke database
-	// UPDATE: Kita gunakan QueryRow ... RETURNING id agar kita dapat ID user yang baru dibuat
+	// Simpan ke database
 	var userID string
 	err = db.QueryRow(`
 		INSERT INTO users (name, email, password_hash)
@@ -49,12 +89,17 @@ func Register(db *sql.DB, req RegisterRequest) error {
 	`, req.Name, req.Email, string(hashedPassword)).Scan(&userID)
 
 	if err != nil {
-		// biasanya karena email duplicate (UNIQUE)
-		return errors.New("email sudah terdaftar")
+		// Fallback error handling (jaga-jaga jika ada race condition)
+		if strings.Contains(err.Error(), "users_name_key") {
+			return errors.New("username telah digunakan")
+		}
+		if strings.Contains(err.Error(), "users_email_key") {
+			return errors.New("email sudah terdaftar")
+		}
+		return errors.New("gagal mendaftar, terjadi kesalahan server")
 	}
 
-	// UPDATE BARU: Buat entry kosong di tabel profiles untuk user ini
-	// Ini menjamin user punya profil (meski masih kosong)
+	// Buat entry kosong di tabel profiles
 	_, _ = db.Exec(`INSERT INTO profiles (user_id) VALUES ($1)`, userID)
 
 	return nil
@@ -126,7 +171,7 @@ func Login(db *sql.DB, req LoginRequest) (LoginResponse, error) {
 }
 
 //
-// ===== GET ME (BARU) =====
+// ===== GET ME =====
 // Fungsi untuk mengambil data user beserta foto profilnya
 //
 
@@ -141,7 +186,6 @@ type UserResponse struct {
 func GetMe(db *sql.DB, userID string) (UserResponse, error) {
 	var user UserResponse
 
-	// Gunakan sql.NullString untuk menangani jika avatar_url di database NULL
 	var avatarURL sql.NullString
 
 	// Query LEFT JOIN users & profiles
@@ -167,7 +211,6 @@ func GetMe(db *sql.DB, userID string) (UserResponse, error) {
 		return UserResponse{}, err
 	}
 
-	// Jika avatar ada di DB, masukkan ke struct. Jika NULL, biarkan string kosong ""
 	if avatarURL.Valid {
 		user.AvatarURL = avatarURL.String
 	}

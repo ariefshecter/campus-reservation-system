@@ -20,7 +20,7 @@ import (
 
 type RequestOTPRequest struct {
 	Phone string `json:"phone"`
-	Name  string `json:"name"` // Optional, hanya wajib saat Register pertama kali
+	Name  string `json:"name"`
 }
 
 type VerifyOTPRequest struct {
@@ -40,9 +40,26 @@ func RequestOTP(db *sql.DB, req RequestOTPRequest, flowType string) error {
 		return errors.New("nomor telepon tidak valid")
 	}
 
-	// Cek Logika berdasarkan Flow
+	// -------------------------------------------------------------
+	// [BARU] VALIDASI KE WHATSAPP GATEWAY
+	// -------------------------------------------------------------
+	// Cek apakah nomor benar-benar terdaftar di WhatsApp
+	isWARegistered, err := whatsapp.CheckUser(cleanPhone)
+	if err != nil {
+		// Jika terjadi error saat menghubungi gateway (misal timeout/down),
+		// Anda bisa memilih untuk memblokir (return error) atau meloloskan (log only).
+		// Disini kita memblokir agar aman.
+		return errors.New("gagal memvalidasi nomor ke server WhatsApp: " + err.Error())
+	}
+
+	if !isWARegistered {
+		return errors.New("nomor ini tidak terdaftar di WhatsApp")
+	}
+	// -------------------------------------------------------------
+
+	// Cek apakah nomor sudah terdaftar di Database lokal
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)", cleanPhone).Scan(&exists)
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)", cleanPhone).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -72,7 +89,10 @@ func RequestOTP(db *sql.DB, req RequestOTPRequest, flowType string) error {
 
 	// Kirim WA
 	go func() {
-		_ = whatsapp.SendOTP(cleanPhone, otpCode)
+		// SendOTP sebaiknya mengembalikan error agar bisa dilog jika gagal kirim
+		if err := whatsapp.SendOTP(cleanPhone, otpCode); err != nil {
+			fmt.Printf("Gagal mengirim OTP ke %s: %v\n", cleanPhone, err)
+		}
 	}()
 
 	return nil
@@ -95,7 +115,8 @@ func VerifyRegisterOTP(db *sql.DB, req VerifyOTPRequest, name string, password s
 
 	// 3. Buat User Baru dengan Password
 	var userID string
-	dummyEmail := cleanPhone + "@phone.users" // Tetap pakai dummy email atau minta email user sekalian (opsional)
+	// Gunakan format email dummy yang konsisten atau biarkan user update nanti
+	dummyEmail := cleanPhone + "@phone.users"
 
 	// Query INSERT diupdate untuk menyertakan password_hash
 	err = db.QueryRow(`
@@ -185,13 +206,9 @@ func generateJWT(userID, role string) (LoginResponse, error) {
 }
 
 func cleanPhoneNumber(phone string) string {
-	// Hapus spasi atau dash
 	phone = strings.ReplaceAll(phone, " ", "")
 	phone = strings.ReplaceAll(phone, "-", "")
 
-	// Normalisasi 628 ke 08 agar seragam di database (opsional, tergantung preferensi DB)
-	// Disini saya standarkan ke format "08xxx" untuk database internal,
-	// tapi saat kirim WA di client.go dikonversi ke 628
 	if strings.HasPrefix(phone, "62") {
 		phone = "0" + phone[2:]
 	}
