@@ -162,7 +162,7 @@ export default function UserProfilePage() {
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       console.error(error);
-      toast.error("Gagal mengupload foto");
+      toast.error("Gagal upload foto. Mohon lengkapi dan simpan data profil Anda terlebih dahulu.");
     } finally {
       setUploading(false);
     }
