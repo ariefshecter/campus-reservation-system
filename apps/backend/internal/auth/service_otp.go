@@ -32,52 +32,56 @@ type VerifyOTPRequest struct {
 // SERVICE LOGIC
 // ==========================
 
-// 1. Request OTP (Digunakan untuk Login maupun Register)
+// 1. Request OTP (Digunakan untuk Login, Register, dan Ganti Nomor)
 func RequestOTP(db *sql.DB, req RequestOTPRequest, flowType string) error {
-	// Format nomor HP standar (untuk simpan di DB bersih tanpa @s.whatsapp.net)
+	// Format nomor HP standar
 	cleanPhone := cleanPhoneNumber(req.Phone)
 	if cleanPhone == "" {
 		return errors.New("nomor telepon tidak valid")
 	}
 
 	// -------------------------------------------------------------
-	// [BARU] VALIDASI KE WHATSAPP GATEWAY
+	// 1. VALIDASI KE WHATSAPP GATEWAY
 	// -------------------------------------------------------------
-	// Cek apakah nomor benar-benar terdaftar di WhatsApp
 	isWARegistered, err := whatsapp.CheckUser(cleanPhone)
 	if err != nil {
-		// Jika terjadi error saat menghubungi gateway (misal timeout/down),
-		// Anda bisa memilih untuk memblokir (return error) atau meloloskan (log only).
-		// Disini kita memblokir agar aman.
 		return errors.New("gagal memvalidasi nomor ke server WhatsApp: " + err.Error())
 	}
 
 	if !isWARegistered {
 		return errors.New("nomor ini tidak terdaftar di WhatsApp")
 	}
-	// -------------------------------------------------------------
 
-	// Cek apakah nomor sudah terdaftar di Database lokal
+	// -------------------------------------------------------------
+	// 2. CEK DATABASE LOKAL
+	// -------------------------------------------------------------
 	var exists bool
 	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)", cleanPhone).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
+	// Logika berdasarkan Flow Type
 	if flowType == "login" && !exists {
 		return errors.New("nomor HP belum terdaftar, silahkan register")
 	}
 	if flowType == "register" && exists {
 		return errors.New("nomor HP sudah terdaftar, silahkan login")
 	}
+	// [BARU] Validasi untuk Ganti Nomor
+	if flowType == "change_phone" && exists {
+		return errors.New("nomor HP sudah digunakan oleh pengguna lain")
+	}
 
-	// Generate 6 digit Code
+	// -------------------------------------------------------------
+	// 3. GENERATE & SIMPAN OTP
+	// -------------------------------------------------------------
 	otpCode := fmt.Sprintf("%06d", rand.Intn(1000000))
 
-	// Hapus kode lama jika ada untuk nomor ini agar tidak nyampah
+	// Hapus kode lama
 	_, _ = db.Exec("DELETE FROM verification_codes WHERE phone_number = $1", cleanPhone)
 
-	// Simpan Kode ke DB (Expired 5 menit)
+	// Simpan Kode (Expired 5 menit)
 	_, err = db.Exec(`
 		INSERT INTO verification_codes (phone_number, code, type, expiration_time)
 		VALUES ($1, $2, $3, NOW() + INTERVAL '5 minutes')
@@ -89,7 +93,6 @@ func RequestOTP(db *sql.DB, req RequestOTPRequest, flowType string) error {
 
 	// Kirim WA
 	go func() {
-		// SendOTP sebaiknya mengembalikan error agar bisa dilog jika gagal kirim
 		if err := whatsapp.SendOTP(cleanPhone, otpCode); err != nil {
 			fmt.Printf("Gagal mengirim OTP ke %s: %v\n", cleanPhone, err)
 		}
@@ -102,23 +105,18 @@ func RequestOTP(db *sql.DB, req RequestOTPRequest, flowType string) error {
 func VerifyRegisterOTP(db *sql.DB, req VerifyOTPRequest, name string, password string) (LoginResponse, error) {
 	cleanPhone := cleanPhoneNumber(req.Phone)
 
-	// 1. Validasi Kode OTP
 	if err := validateOTP(db, cleanPhone, req.Code, "register"); err != nil {
 		return LoginResponse{}, err
 	}
 
-	// 2. Hash Password (BARU)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return LoginResponse{}, errors.New("gagal mengenkripsi password")
 	}
 
-	// 3. Buat User Baru dengan Password
 	var userID string
-	// Gunakan format email dummy yang konsisten atau biarkan user update nanti
 	dummyEmail := cleanPhone + "@phone.users"
 
-	// Query INSERT diupdate untuk menyertakan password_hash
 	err = db.QueryRow(`
 		INSERT INTO users (name, email, phone, password_hash, role, is_phone_verified)
 		VALUES ($1, $2, $3, $4, 'user', true)
@@ -129,13 +127,9 @@ func VerifyRegisterOTP(db *sql.DB, req VerifyOTPRequest, name string, password s
 		return LoginResponse{}, errors.New("gagal membuat user baru: " + err.Error())
 	}
 
-	// 4. Buat Profile Kosong
 	_, _ = db.Exec(`INSERT INTO profiles (user_id, phone_number) VALUES ($1, $2)`, userID, cleanPhone)
-
-	// 5. Hapus OTP terpakai
 	_, _ = db.Exec("DELETE FROM verification_codes WHERE phone_number = $1", cleanPhone)
 
-	// 6. Generate Token
 	return generateJWT(userID, "user")
 }
 
@@ -143,23 +137,66 @@ func VerifyRegisterOTP(db *sql.DB, req VerifyOTPRequest, name string, password s
 func VerifyLoginOTP(db *sql.DB, req VerifyOTPRequest) (LoginResponse, error) {
 	cleanPhone := cleanPhoneNumber(req.Phone)
 
-	// Validasi Kode
 	if err := validateOTP(db, cleanPhone, req.Code, "login"); err != nil {
 		return LoginResponse{}, err
 	}
 
-	// Ambil Data User
 	var userID, role string
 	err := db.QueryRow("SELECT id, role FROM users WHERE phone = $1", cleanPhone).Scan(&userID, &role)
 	if err != nil {
 		return LoginResponse{}, errors.New("user tidak ditemukan")
 	}
 
-	// Hapus OTP terpakai
 	_, _ = db.Exec("DELETE FROM verification_codes WHERE phone_number = $1", cleanPhone)
 
-	// Generate Token
 	return generateJWT(userID, role)
+}
+
+// 4. [BARU] Verify Change Phone OTP
+func VerifyChangePhoneOTP(db *sql.DB, userID string, req VerifyOTPRequest) error {
+	cleanPhone := cleanPhoneNumber(req.Phone)
+
+	// 1. Validasi Kode OTP
+	if err := validateOTP(db, cleanPhone, req.Code, "change_phone"); err != nil {
+		return err
+	}
+
+	// 2. Gunakan Transaksi Database (Agar User & Profile terupdate bersamaan)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Update tabel users
+	_, err = tx.Exec(`
+		UPDATE users 
+		SET phone = $1, is_phone_verified = true, updated_at = NOW() 
+		WHERE id = $2
+	`, cleanPhone, userID)
+	if err != nil {
+		tx.Rollback()
+		return errors.New("gagal mengupdate data user")
+	}
+
+	// Update tabel profiles
+	_, err = tx.Exec(`
+		UPDATE profiles 
+		SET phone_number = $1, updated_at = NOW() 
+		WHERE user_id = $2
+	`, cleanPhone, userID)
+	if err != nil {
+		tx.Rollback()
+		return errors.New("gagal mengupdate profile")
+	}
+
+	// Hapus OTP yang sudah dipakai
+	_, err = tx.Exec("DELETE FROM verification_codes WHERE phone_number = $1", cleanPhone)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // ==========================

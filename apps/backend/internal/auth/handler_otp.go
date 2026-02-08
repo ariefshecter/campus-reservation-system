@@ -153,3 +153,70 @@ func VerifyRegisterOTPHandler(db *sql.DB) fiber.Handler {
 		return c.Status(201).JSON(res)
 	}
 }
+
+// RequestChangePhoneOTPHandler
+// @Summary      Request OTP Ganti Nomor
+// @Description  Kirim OTP ke nomor baru yang ingin digunakan user.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body RequestOTPReq true "Nomor Baru"
+// @Success      200  {object} map[string]string "OTP Terkirim"
+// @Router       /users/change-phone/request-otp [post]
+func RequestChangePhoneOTPHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Pastikan user login
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		}
+
+		var req RequestOTPReq
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+		}
+
+		// Validasi input nomor (misal hanya angka) bisa ditambahkan di sini atau di service
+		// Service RequestOTP akan melakukan validasi WA dan duplikasi
+
+		serviceReq := RequestOTPRequest{Phone: req.Phone}
+
+		if err := RequestOTP(db, serviceReq, "change_phone"); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.JSON(fiber.Map{"message": "Kode OTP dikirim ke nomor baru"})
+	}
+}
+
+// VerifyChangePhoneOTPHandler
+// @Summary      Verifikasi OTP Ganti Nomor
+// @Description  Verifikasi kode dan update nomor HP di database.
+// @Tags         Auth WhatsApp
+// @Accept       json
+// @Produce      json
+// @Param        request body VerifyLoginReq true "Nomor & Kode"
+// @Success      200  {object} map[string]string "Sukses"
+// @Router       /users/change-phone/verify-otp [post]
+func VerifyChangePhoneOTPHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		}
+
+		// Kita bisa reuse struct VerifyLoginReq karena isinya sama (Phone & Code)
+		var req VerifyLoginReq
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+		}
+
+		serviceReq := VerifyOTPRequest{Phone: req.Phone, Code: req.Code}
+
+		if err := VerifyChangePhoneOTP(db, userID, serviceReq); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.JSON(fiber.Map{"message": "Nomor WhatsApp berhasil diperbarui"})
+	}
+}

@@ -167,7 +167,7 @@ export default function RegisterPage() {
              {otpStep === "FORM" ? (
                <form onSubmit={handleRequestOTP} className="space-y-5">
                  <div className="space-y-2">
-                    <Label htmlFor="waName" className="text-slate-200">Nama Lengkap</Label>
+                    <Label htmlFor="waName" className="text-slate-200">Username</Label>
                     <Input 
                       id="waName" 
                       name="name" 

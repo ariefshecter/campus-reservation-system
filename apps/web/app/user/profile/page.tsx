@@ -19,7 +19,8 @@ import {
   UserCog,
   Eye,      
   EyeOff,
-  Mail      // Ikon Baru untuk Email
+  Mail,
+  Smartphone
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 /* =======================
    TYPES
@@ -45,7 +54,7 @@ type ProfileData = {
   user_id?: string;
 };
 
-// URL Backend untuk akses gambar (jika path relatif)
+// URL Backend untuk akses gambar
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export default function UserProfilePage() {
@@ -65,11 +74,11 @@ export default function UserProfilePage() {
     gender: "", 
   });
 
-  // State Email (BARU)
+  // State Email
   const [currentEmail, setCurrentEmail] = useState("");
   const [emailForm, setEmailForm] = useState({
     new_email: "",
-    password: "", // Password konfirmasi
+    password: "", 
   });
   const [emailLoading, setEmailLoading] = useState(false);
   const [showEmailPass, setShowEmailPass] = useState(false);
@@ -80,21 +89,27 @@ export default function UserProfilePage() {
     new_password: "",
     confirm_password: "",
   });
-
-  // State untuk Toggle Password Visibility
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
+  // ==========================================
+  // STATE GANTI NOMOR HP (OTP)
+  // ==========================================
+  const [isPhoneOpen, setIsPhoneOpen] = useState(false);
+  const [phoneStep, setPhoneStep] = useState<"INPUT" | "VERIFY">("INPUT");
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* =======================
-     1. FETCH PROFILE & EMAIL
+     1. FETCH DATA
   ======================= */
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Ambil Profile Data
         const resProfile = await api.get("/profile");
         if (resProfile.data) {
           setFormData((prev) => ({ 
@@ -104,7 +119,6 @@ export default function UserProfilePage() {
           }));
         }
 
-        // 2. Ambil Email dari endpoint /me (karena /profile tidak return email)
         const resMe = await api.get("/me");
         if (resMe.data) {
           setCurrentEmail(resMe.data.email);
@@ -121,7 +135,7 @@ export default function UserProfilePage() {
   }, []);
 
   /* =======================
-     2. HANDLE UPLOAD FOTO
+     2. HANDLERS (FOTO & PROFIL)
   ======================= */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -140,16 +154,12 @@ export default function UserProfilePage() {
       const res = await api.post("/profile/avatar", uploadData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      
       const newUrl = res.data.avatar_url || res.data.url; 
-      
       const updatedProfile = { ...formData, avatar_url: newUrl };
       await api.put("/profile", updatedProfile);
-
       setFormData(updatedProfile);
       toast.success("Foto profil berhasil diperbarui!");
       setTimeout(() => window.location.reload(), 1000);
-
     } catch (error) {
       console.error(error);
       toast.error("Gagal mengupload foto");
@@ -158,9 +168,6 @@ export default function UserProfilePage() {
     }
   };
 
-  /* =======================
-     3. HANDLE SAVE PROFILE
-  ======================= */
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -169,60 +176,111 @@ export default function UserProfilePage() {
       toast.success("Profil berhasil diperbarui");
     } catch (error) {
       console.error(error);
-      toast.error("Gagal menyimpan profil (Cek kelengkapan data)");
+      toast.error("Gagal menyimpan profil");
     } finally {
       setSaving(false);
     }
   };
 
   /* =======================
-     4. HANDLE UPDATE EMAIL (BARU)
+     3. HANDLER GANTI NOMOR HP (OTP)
+  ======================= */
+  
+  // Step 1: Request OTP
+  const handleRequestOtp = async () => {
+    if (!newPhone || newPhone.length < 9) {
+      toast.error("Masukkan nomor WhatsApp yang valid");
+      return;
+    }
+    setPhoneLoading(true);
+    try {
+      await api.post("/users/change-phone/request-otp", { phone: newPhone });
+      toast.success("Kode OTP dikirim ke WhatsApp Anda");
+      setPhoneStep("VERIFY");
+    } catch (error) {
+      const err = error as AxiosError<{ error: string }>;
+      toast.error(err.response?.data?.error || "Gagal mengirim OTP");
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length < 4) {
+      toast.error("Masukkan kode OTP yang valid");
+      return;
+    }
+    setPhoneLoading(true);
+    try {
+      await api.post("/users/change-phone/verify-otp", { 
+        phone: newPhone, 
+        code: otpCode 
+      });
+      
+      toast.success("Nomor telepon berhasil diperbarui!");
+      
+      // Update state lokal
+      setFormData(prev => ({ ...prev, phone_number: newPhone }));
+      
+      // Reset & Tutup Dialog
+      setIsPhoneOpen(false);
+      setNewPhone("");
+      setOtpCode("");
+      setPhoneStep("INPUT");
+
+    } catch (error) {
+      const err = error as AxiosError<{ error: string }>;
+      toast.error(err.response?.data?.error || "Kode OTP salah atau kadaluarsa");
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  // Helper Input Angka Saja
+  const handlePhoneInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (/^[0-9]*$/.test(val)) {
+      setNewPhone(val);
+    }
+  };
+
+  /* =======================
+     4. HANDLERS SECURITY (EMAIL & PASS)
   ======================= */
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!emailForm.new_email || !emailForm.password) {
-      toast.error("Mohon lengkapi email baru dan password konfirmasi");
+      toast.error("Lengkapi data email baru dan password");
       return;
     }
-
     setEmailLoading(true);
     try {
-      // Panggil endpoint backend yang baru dibuat
       const res = await api.patch("/users/change-email", {
         new_email: emailForm.new_email,
         password: emailForm.password
       });
-
       toast.success("Email berhasil diperbarui!");
-      setCurrentEmail(res.data.email); // Update tampilan email saat ini
-      setEmailForm({ new_email: "", password: "" }); // Reset form
-      
+      setCurrentEmail(res.data.email);
+      setEmailForm({ new_email: "", password: "" });
     } catch (error) {
       const err = error as AxiosError<{ error: string }>;
-      const msg = err.response?.data?.error || "Gagal memperbarui email";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Gagal memperbarui email");
     } finally {
       setEmailLoading(false);
     }
   };
 
-  /* =======================
-     5. HANDLE CHANGE PASSWORD
-  ======================= */
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (passData.new_password !== passData.confirm_password) {
       toast.error("Konfirmasi password tidak cocok");
       return;
     }
-
     if (passData.new_password.length < 6) {
       toast.error("Password minimal 6 karakter");
       return;
     }
-
     setSaving(true);
     try {
       await api.post("/users/change-password", {
@@ -233,8 +291,7 @@ export default function UserProfilePage() {
       setPassData({ old_password: "", new_password: "", confirm_password: "" });
     } catch (error) {
       const err = error as AxiosError<{ error: string }>;
-      const msg = err.response?.data?.error || "Gagal mengubah password";
-      toast.error(msg);
+      toast.error(err.response?.data?.error || "Gagal mengubah password");
     } finally {
       setSaving(false);
     }
@@ -352,7 +409,7 @@ export default function UserProfilePage() {
                 <CardHeader>
                   <CardTitle className="text-xl text-white">Informasi Profil</CardTitle>
                   <CardDescription className="text-slate-400">
-                    Lengkapi data diri Anda untuk keperluan administrasi kampus.
+                    Lengkapi data diri Anda. Nomor telepon hanya dapat diubah melalui verifikasi OTP.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -420,16 +477,27 @@ export default function UserProfilePage() {
                     <div className="grid md:grid-cols-2 gap-5">
                       <div className="space-y-2">
                         <Label className="text-slate-300">Nomor Telepon (WA)</Label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input 
-                            placeholder="08xxxxxxxx" 
-                            className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
-                            type="tel"
-                            value={formData.phone_number}
-                            onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
-                          />
+                        <div className="relative flex gap-2">
+                          <div className="relative flex-1">
+                            <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                            <Input 
+                              placeholder="08xxxxxxxx" 
+                              className="pl-9 bg-slate-950/50 border-white/10 text-slate-400 placeholder:text-slate-600 cursor-not-allowed"
+                              value={formData.phone_number}
+                              readOnly
+                              disabled
+                            />
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                            onClick={() => setIsPhoneOpen(true)}
+                          >
+                            Ganti
+                          </Button>
                         </div>
+                        <p className="text-xs text-slate-500">*Gunakan tombol Ganti untuk merubah nomor.</p>
                       </div>
 
                       <div className="space-y-2">
@@ -494,7 +562,7 @@ export default function UserProfilePage() {
         <TabsContent value="security">
           <div className="flex flex-col items-center space-y-8">
             
-            {/* 1. CARD UBAH EMAIL (BARU) */}
+            {/* 1. CARD UBAH EMAIL */}
             <Card className="w-full max-w-2xl border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl">
               <CardHeader>
                 <CardTitle className="text-white">Ubah Email Address</CardTitle>
@@ -663,8 +731,100 @@ export default function UserProfilePage() {
             </Card>
           </div>
         </TabsContent>
-
       </Tabs>
+
+      {/* ========================================================= */}
+      {/* DIALOG GANTI NOMOR TELEPON */}
+      {/* ========================================================= */}
+      <Dialog open={isPhoneOpen} onOpenChange={setIsPhoneOpen}>
+        <DialogContent className="bg-slate-900 border-white/10 text-slate-200 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Ganti Nomor WhatsApp</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {phoneStep === "INPUT" 
+                ? "Masukkan nomor WhatsApp baru Anda. Kami akan mengirimkan kode verifikasi." 
+                : `Masukkan kode OTP yang dikirim ke ${newPhone}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {phoneStep === "INPUT" ? (
+            // STEP 1: INPUT NOMOR
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Nomor WhatsApp Baru</Label>
+                <div className="relative">
+                  <Smartphone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                  <Input 
+                    placeholder="Contoh: 08123456789" 
+                    className="pl-9 bg-slate-950 border-white/10 text-white focus-visible:ring-blue-600"
+                    value={newPhone}
+                    onChange={handlePhoneInput}
+                    autoFocus
+                  />
+                </div>
+                <p className="text-xs text-slate-500">Pastikan nomor aktif dan terhubung dengan WhatsApp.</p>
+              </div>
+            </div>
+          ) : (
+            // STEP 2: INPUT OTP
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Kode OTP</Label>
+                <Input 
+                  placeholder="Masukkan 6 digit kode" 
+                  className="bg-slate-950 border-white/10 text-white text-center tracking-widest text-lg focus-visible:ring-blue-600"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-center">
+                 <Button 
+                    variant="link" 
+                    className="text-blue-400 h-auto p-0 text-sm"
+                    onClick={() => setPhoneStep("INPUT")}
+                  >
+                    Ganti Nomor / Kirim Ulang?
+                  </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="sm:justify-end gap-2">
+             <Button 
+              type="button" 
+              variant="secondary" 
+              className="bg-slate-800 text-white hover:bg-slate-700"
+              onClick={() => setIsPhoneOpen(false)}
+            >
+              Batal
+            </Button>
+
+            {phoneStep === "INPUT" ? (
+              <Button 
+                type="button" 
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={handleRequestOtp}
+                disabled={phoneLoading || !newPhone}
+              >
+                 {phoneLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                 Kirim Kode
+              </Button>
+            ) : (
+              <Button 
+                type="button" 
+                className="bg-green-600 text-white hover:bg-green-700"
+                onClick={handleVerifyOtp}
+                disabled={phoneLoading || !otpCode}
+              >
+                 {phoneLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                 Verifikasi
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
