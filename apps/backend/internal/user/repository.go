@@ -97,15 +97,22 @@ func UpdateUserRole(db *sql.DB, userID string, newRole string) error {
 // ==========================
 // DELETE USER (SOFT DELETE + RENAME EMAIL)
 // ==========================
+// ==========================
+// DELETE USER (SOFT DELETE + RENAME EMAIL & PHONE)
+// ==========================
 func DeleteUser(tx *sql.Tx, id string, adminID string) error {
-	// 1. Soft Delete User & Rename Email AND Name agar bisa daftar lagi
-	// [FIX] Tambahkan rename pada kolom 'name'
+	// 1. Soft Delete User & Rename Email, Name, DAN Phone agar bisa daftar lagi
+	// [FIX] Tambahkan update pada kolom 'phone' dengan pengecekan NULL
 	_, err := tx.Exec(`
 		UPDATE users 
 		SET deleted_at = NOW(), 
 			deleted_by = $2,
 			email = CONCAT(email, '.deleted_', EXTRACT(EPOCH FROM NOW())::bigint),
-			name = CONCAT(name, ' (Deleted ', EXTRACT(EPOCH FROM NOW())::bigint, ')')
+			name = CONCAT(name, ' (Deleted ', EXTRACT(EPOCH FROM NOW())::bigint, ')'),
+			phone = CASE 
+				WHEN phone IS NOT NULL THEN CONCAT(phone, '.deleted_', EXTRACT(EPOCH FROM NOW())::bigint) 
+				ELSE NULL 
+			END
 		WHERE id = $1
 	`, id, adminID)
 	if err != nil {
