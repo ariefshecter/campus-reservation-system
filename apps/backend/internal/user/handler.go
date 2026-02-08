@@ -149,3 +149,67 @@ func ChangePasswordHandler(db *sql.DB) fiber.Handler {
 		return c.JSON(fiber.Map{"message": "Password berhasil diubah"})
 	}
 }
+
+// ==========================
+// DTO: CHANGE EMAIL (BARU)
+// ==========================
+type ChangeEmailRequest struct {
+	NewEmail string `json:"new_email"`
+	Password string `json:"password"` // Password konfirmasi
+}
+
+// ==========================
+// CHANGE EMAIL HANDLER (BARU)
+// ==========================
+func ChangeEmailHandler(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Ambil User ID dari JWT
+		userID, ok := c.Locals("user_id").(string)
+		if !ok || userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		}
+
+		var req ChangeEmailRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Format request tidak valid"})
+		}
+
+		// Validasi Input Kosong
+		if req.NewEmail == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Email baru wajib diisi"})
+		}
+		if req.Password == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Masukkan password untuk konfirmasi"})
+		}
+
+		// 1. Ambil data user untuk verifikasi password lama
+		user, err := GetUserByID(db, userID)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User tidak ditemukan"})
+		}
+
+		// 2. Cek Password Konfirmasi
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+			return c.Status(401).JSON(fiber.Map{"error": "Password konfirmasi salah"})
+		}
+
+		// 3. Cek apakah email sudah dipakai user LAIN
+		isTaken, err := IsEmailTaken(db, req.NewEmail, userID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal memvalidasi email"})
+		}
+		if isTaken {
+			return c.Status(400).JSON(fiber.Map{"error": "Email sudah digunakan oleh pengguna lain"})
+		}
+
+		// 4. Lakukan Update
+		if err := UpdateEmail(db, userID, req.NewEmail); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal memperbarui email"})
+		}
+
+		return c.JSON(fiber.Map{
+			"message": "Email berhasil diperbarui",
+			"email":   req.NewEmail,
+		})
+	}
+}

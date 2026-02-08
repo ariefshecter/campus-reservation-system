@@ -192,3 +192,29 @@ func GetUserAttendanceStats(db *sql.DB, userID string) (AttendanceStats, error) 
 	stats.Total = stats.OnTime + stats.Late + stats.NoShow
 	return stats, nil
 }
+
+// ==========================
+// UPDATE EMAIL
+// ==========================
+func UpdateEmail(db *sql.DB, userID string, newEmail string) error {
+	_, err := db.Exec(`
+		UPDATE users 
+		SET email = $1, updated_at = NOW() 
+		WHERE id = $2
+	`, newEmail, userID)
+	return err
+}
+
+// ==========================
+// CHECK EMAIL AVAILABILITY (BARU)
+// ==========================
+// Mengecek apakah email sudah dipakai user LAIN (bukan user yang sedang login)
+func IsEmailTaken(db *sql.DB, email string, excludeUserID string) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND id <> $2)"
+	err := db.QueryRow(query, email, excludeUserID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}

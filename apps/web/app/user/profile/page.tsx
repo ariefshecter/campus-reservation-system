@@ -17,8 +17,9 @@ import {
   Users, 
   Building2, 
   UserCog,
-  Eye,      // Ikon Mata (Show)
-  EyeOff    // Ikon Mata Coret (Hide)
+  Eye,      
+  EyeOff,
+  Mail      // Ikon Baru untuk Email
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,15 @@ export default function UserProfilePage() {
     gender: "", 
   });
 
+  // State Email (BARU)
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [emailForm, setEmailForm] = useState({
+    new_email: "",
+    password: "", // Password konfirmasi
+  });
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [showEmailPass, setShowEmailPass] = useState(false);
+
   // State Ganti Password
   const [passData, setPassData] = useState({
     old_password: "",
@@ -79,32 +89,39 @@ export default function UserProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* =======================
-     1. FETCH PROFILE
+     1. FETCH PROFILE & EMAIL
   ======================= */
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get("/profile");
-        if (res.data) {
+        // 1. Ambil Profile Data
+        const resProfile = await api.get("/profile");
+        if (resProfile.data) {
           setFormData((prev) => ({ 
             ...prev, 
-            ...res.data,
-            // Pastikan gender tidak null
-            gender: res.data.gender || "" 
+            ...resProfile.data,
+            gender: resProfile.data.gender || "" 
           }));
         }
+
+        // 2. Ambil Email dari endpoint /me (karena /profile tidak return email)
+        const resMe = await api.get("/me");
+        if (resMe.data) {
+          setCurrentEmail(resMe.data.email);
+        }
+
       } catch (error) {
-        console.error("Gagal load profile", error);
-        toast.error("Gagal memuat data profil");
+        console.error("Gagal load data", error);
+        toast.error("Gagal memuat data pengguna");
       } finally {
         setLoading(false);
       }
     };
-    fetchProfile();
+    fetchData();
   }, []);
 
   /* =======================
-     2. HANDLE UPLOAD FOTO (FIXED)
+     2. HANDLE UPLOAD FOTO
   ======================= */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,24 +137,17 @@ export default function UserProfilePage() {
 
     setUploading(true);
     try {
-      // 1. Upload File ke Backend
       const res = await api.post("/profile/avatar", uploadData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       
       const newUrl = res.data.avatar_url || res.data.url; 
       
-      // 2. [PENTING] Langsung simpan URL baru ke Database Profile
-      // Kita gabungkan data form saat ini dengan URL foto baru
       const updatedProfile = { ...formData, avatar_url: newUrl };
-      
       await api.put("/profile", updatedProfile);
 
-      // 3. Update State Lokal & Beri Notifikasi
       setFormData(updatedProfile);
       toast.success("Foto profil berhasil diperbarui!");
-      
-      // 4. Reload halaman agar header (UserLayout) juga terupdate
       setTimeout(() => window.location.reload(), 1000);
 
     } catch (error) {
@@ -166,7 +176,39 @@ export default function UserProfilePage() {
   };
 
   /* =======================
-     4. HANDLE CHANGE PASSWORD
+     4. HANDLE UPDATE EMAIL (BARU)
+  ======================= */
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!emailForm.new_email || !emailForm.password) {
+      toast.error("Mohon lengkapi email baru dan password konfirmasi");
+      return;
+    }
+
+    setEmailLoading(true);
+    try {
+      // Panggil endpoint backend yang baru dibuat
+      const res = await api.patch("/users/change-email", {
+        new_email: emailForm.new_email,
+        password: emailForm.password
+      });
+
+      toast.success("Email berhasil diperbarui!");
+      setCurrentEmail(res.data.email); // Update tampilan email saat ini
+      setEmailForm({ new_email: "", password: "" }); // Reset form
+      
+    } catch (error) {
+      const err = error as AxiosError<{ error: string }>;
+      const msg = err.response?.data?.error || "Gagal memperbarui email";
+      toast.error(msg);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  /* =======================
+     5. HANDLE CHANGE PASSWORD
   ======================= */
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,16 +248,12 @@ export default function UserProfilePage() {
     );
   }
 
-  // Helper resolusi URL gambar agar konsisten dengan dashboard
   const getAvatarSrc = (path: string) => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
-    
-    // Fix path Windows
     let cleanPath = path.replace(/\\/g, "/");
     if (cleanPath.startsWith("/")) cleanPath = cleanPath.slice(1);
     if (!cleanPath.startsWith("uploads/")) cleanPath = `uploads/${cleanPath}`;
-    
     return `${BACKEND_URL}/${cleanPath}`;
   };
 
@@ -454,7 +492,78 @@ export default function UserProfilePage() {
 
         {/* ================= TAB 2: KEAMANAN ================= */}
         <TabsContent value="security">
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center space-y-8">
+            
+            {/* 1. CARD UBAH EMAIL (BARU) */}
+            <Card className="w-full max-w-2xl border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-white">Ubah Email Address</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Perbarui alamat email yang terhubung dengan akun Anda.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateEmail} className="space-y-5">
+                  <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-4">
+                    <p className="text-sm text-blue-200">
+                      Email saat ini: <span className="font-semibold text-white">{currentEmail || "Belum dimuat..."}</span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">Email Baru</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Input 
+                        type="email"
+                        placeholder="nama@email.com"
+                        className="pl-9 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                        value={emailForm.new_email}
+                        onChange={(e) => setEmailForm({...emailForm, new_email: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">Konfirmasi Password Saat Ini</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Input 
+                        type={showEmailPass ? "text" : "password"}
+                        placeholder="Masukkan password Anda untuk verifikasi"
+                        className="pl-9 pr-10 bg-slate-950/50 border-white/10 text-white placeholder:text-slate-600 focus-visible:ring-blue-600"
+                        value={emailForm.password}
+                        onChange={(e) => setEmailForm({...emailForm, password: e.target.value})}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailPass(!showEmailPass)}
+                        className="absolute right-3 top-3 text-slate-500 hover:text-white transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showEmailPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button 
+                      type="submit" 
+                      disabled={emailLoading}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {emailLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Menyimpan...
+                        </>
+                      ) : "Simpan Email Baru"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* 2. CARD GANTI PASSWORD */}
             <Card className="w-full max-w-2xl border-white/10 bg-slate-900/50 backdrop-blur-sm text-slate-200 shadow-xl">
               <CardHeader>
                 <CardTitle className="text-white">Ganti Password</CardTitle>

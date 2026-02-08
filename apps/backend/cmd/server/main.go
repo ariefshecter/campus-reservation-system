@@ -134,6 +134,8 @@ func main() {
 
 	// Change Password
 	app.Post("/users/change-password", auth.JWTProtected(), user.ChangePasswordHandler(db))
+	// Change Email (BARU)
+	app.Patch("/users/change-email", auth.JWTProtected(), user.ChangeEmailHandler(db))
 
 	// ==========================
 	// 6. FACILITY ROUTES
