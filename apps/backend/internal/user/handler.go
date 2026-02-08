@@ -3,6 +3,8 @@ package user
 import (
 	"database/sql"
 
+	"campus-reservation-backend/internal/booking" // [FIX] Import ini penting untuk cancel booking
+
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -92,19 +94,50 @@ func UpdateRoleHandler(db *sql.DB) fiber.Handler {
 }
 
 // ==========================
-// DELETE USER HANDLER
+// DELETE USER HANDLER (FIXED: Transaction & Arguments)
 // ==========================
 func DeleteUserHandler(db *sql.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		id := c.Params("id")
+		id := c.Params("id") // ID User yang akan dihapus
 
-		// Opsional: Cegah admin menghapus dirinya sendiri (butuh logic tambahan cek token ID)
+		// Ambil ID Admin yang sedang login dari JWT
+		adminID, ok := c.Locals("user_id").(string)
+		if !ok || adminID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		}
 
-		if err := DeleteUser(db, id); err != nil {
+		// Cegah admin menghapus dirinya sendiri
+		if id == adminID {
+			return c.Status(400).JSON(fiber.Map{"error": "Tidak dapat menghapus akun sendiri"})
+		}
+
+		// 1. Mulai Transaksi Database
+		tx, err := db.Begin()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal memulai transaksi"})
+		}
+
+		// Defer Rollback: Jika terjadi error di tengah jalan, batalkan semua perubahan
+		defer tx.Rollback()
+
+		// 2. Batalkan Booking Masa Depan User Tersebut
+		//    (Agar ruangan kosong kembali dan bisa dipesan orang lain)
+		if err := booking.CancelFutureBookingsTx(tx, id, adminID); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal membatalkan booking user"})
+		}
+
+		// 3. Soft Delete User & Rename Email
+		//    (Parameter sekarang: tx, id_user, id_admin)
+		if err := DeleteUser(tx, id, adminID); err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Gagal menghapus user"})
 		}
 
-		return c.JSON(fiber.Map{"message": "User berhasil dihapus"})
+		// 4. Commit Transaksi (Simpan Perubahan Permanen)
+		if err := tx.Commit(); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Gagal menyimpan perubahan"})
+		}
+
+		return c.JSON(fiber.Map{"message": "User berhasil dihapus, email dibebaskan, dan jadwal mendatang dibatalkan"})
 	}
 }
 

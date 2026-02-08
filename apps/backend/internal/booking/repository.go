@@ -222,11 +222,11 @@ func UpdateStatusCancel(db *sql.DB, bookingID string, userID string) error {
 // UpdateReview menyimpan atau memperbarui ulasan dari user
 func UpdateReview(db *sql.DB, bookingID string, userID string, comment string) error {
 	_, err := db.Exec(`
-        UPDATE bookings 
-        SET review_comment = $1, 
-            reviewed_at = NOW() 
-        WHERE id = $2 AND user_id = $3 AND status = 'completed'
-    `, comment, bookingID, userID)
+		UPDATE bookings 
+		SET review_comment = $1, 
+			reviewed_at = NOW() 
+		WHERE id = $2 AND user_id = $3 AND status = 'completed'
+	`, comment, bookingID, userID)
 	return err
 }
 
@@ -577,4 +577,20 @@ func GetAttendanceLogs(db *sql.DB, startDate, endDate, status string) ([]Booking
 		bookings = append(bookings, b)
 	}
 	return bookings, nil
+}
+
+// CancelFutureBookingsTx membatalkan booking masa depan milik user yang akan dihapus (Support Transaction)
+func CancelFutureBookingsTx(tx *sql.Tx, userID string, adminID string) error {
+	_, err := tx.Exec(`
+		UPDATE bookings 
+		SET status = 'canceled', 
+			rejection_reason = 'User Account Deleted', 
+			updated_at = NOW(), 
+			updated_by = $2 
+		WHERE user_id = $1 
+		  AND status IN ('pending', 'approved') 
+		  AND start_time > NOW() 
+		  AND deleted_at IS NULL
+	`, userID, adminID)
+	return err
 }

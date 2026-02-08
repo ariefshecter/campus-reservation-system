@@ -37,6 +37,7 @@ type User struct {
 func GetAllUsers(db *sql.DB) ([]User, error) {
 	// Query list user dengan LEFT JOIN ke profiles untuk mengambil data detail
 	// Menggunakan COALESCE agar jika data profile NULL (belum diisi), diganti string kosong ""
+	// [FIX] Ditambahkan WHERE u.deleted_at IS NULL
 	query := `
 		SELECT 
 			u.id, u.name, u.email, u.role, u.created_at,
@@ -50,6 +51,7 @@ func GetAllUsers(db *sql.DB) ([]User, error) {
 			COALESCE(p.position, '')
 		FROM users u
 		LEFT JOIN profiles p ON u.id = p.user_id
+		WHERE u.deleted_at IS NULL
 		ORDER BY u.role ASC, u.created_at DESC 
 	`
 	rows, err := db.Query(query)
@@ -87,16 +89,37 @@ func UpdateUserRole(db *sql.DB, userID string, newRole string) error {
 	_, err := db.Exec(`
 		UPDATE users 
 		SET role = $1, updated_at = NOW()
-		WHERE id = $2
+		WHERE id = $2 AND deleted_at IS NULL
 	`, newRole, userID)
 	return err
 }
 
 // ==========================
-// DELETE USER
+// DELETE USER (SOFT DELETE + RENAME EMAIL)
 // ==========================
-func DeleteUser(db *sql.DB, id string) error {
-	_, err := db.Exec("DELETE FROM users WHERE id = $1", id)
+func DeleteUser(tx *sql.Tx, id string, adminID string) error {
+	// 1. Soft Delete User & Rename Email AND Name agar bisa daftar lagi
+	// [FIX] Tambahkan rename pada kolom 'name'
+	_, err := tx.Exec(`
+		UPDATE users 
+		SET deleted_at = NOW(), 
+			deleted_by = $2,
+			email = CONCAT(email, '.deleted_', EXTRACT(EPOCH FROM NOW())::bigint),
+			name = CONCAT(name, ' (Deleted ', EXTRACT(EPOCH FROM NOW())::bigint, ')')
+		WHERE id = $1
+	`, id, adminID)
+	if err != nil {
+		return err
+	}
+
+	// 2. Hapus Nomor HP di Profile agar bisa dipakai lagi
+	_, err = tx.Exec(`
+		UPDATE profiles 
+		SET phone_number = NULL, 
+			updated_at = NOW()
+		WHERE user_id = $1
+	`, id)
+
 	return err
 }
 
@@ -107,6 +130,7 @@ func GetUserByID(db *sql.DB, id string) (*User, error) {
 	var u User
 
 	// Query detail user DENGAN LEFT JOIN ke profiles agar data biodata terbaca
+	// [FIX] Ditambahkan filter deleted_at IS NULL
 	query := `
 		SELECT 
 			u.id, u.name, u.email, u.password_hash, u.role, u.created_at,
@@ -120,7 +144,7 @@ func GetUserByID(db *sql.DB, id string) (*User, error) {
 			COALESCE(p.position, '')
 		FROM users u
 		LEFT JOIN profiles p ON u.id = p.user_id
-		WHERE u.id = $1
+		WHERE u.id = $1 AND u.deleted_at IS NULL
 	`
 
 	err := db.QueryRow(query, id).Scan(
@@ -148,7 +172,7 @@ func UpdatePassword(db *sql.DB, userID string, newPasswordHash string) error {
 	_, err := db.Exec(`
 		UPDATE users 
 		SET password_hash = $1, updated_at = NOW() 
-		WHERE id = $2
+		WHERE id = $2 AND deleted_at IS NULL
 	`, newPasswordHash, userID)
 	return err
 }
@@ -200,7 +224,7 @@ func UpdateEmail(db *sql.DB, userID string, newEmail string) error {
 	_, err := db.Exec(`
 		UPDATE users 
 		SET email = $1, updated_at = NOW() 
-		WHERE id = $2
+		WHERE id = $2 AND deleted_at IS NULL
 	`, newEmail, userID)
 	return err
 }
@@ -211,7 +235,8 @@ func UpdateEmail(db *sql.DB, userID string, newEmail string) error {
 // Mengecek apakah email sudah dipakai user LAIN (bukan user yang sedang login)
 func IsEmailTaken(db *sql.DB, email string, excludeUserID string) (bool, error) {
 	var exists bool
-	query := "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND id <> $2)"
+	// [FIX] Cek juga deleted_at IS NULL agar email lama yang sudah dihapus tidak terhitung (redundant but safe)
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND id <> $2 AND deleted_at IS NULL)"
 	err := db.QueryRow(query, email, excludeUserID).Scan(&exists)
 	if err != nil {
 		return false, err
