@@ -129,6 +129,17 @@ export default function FacilitiesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // [FIX] Validasi Manual
+    if (!name.trim()) {
+      toast.error("Nama fasilitas tidak boleh kosong")
+      return
+    }
+    if (!capacity || parseInt(capacity) <= 0) {
+      toast.error("Kapasitas harus angka dan lebih dari 0")
+      return
+    }
+
     try {
       const formData = new FormData()
       formData.append("name", name)
@@ -381,7 +392,8 @@ export default function FacilitiesPage() {
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleSubmit} className="px-6 py-6 space-y-6 overflow-y-auto max-h-[75vh]">
+          {/* [FIX] Tambahkan id="facility-form" */}
+          <form id="facility-form" onSubmit={handleSubmit} className="px-6 py-6 space-y-6 overflow-y-auto max-h-[75vh]">
             
             {/* SECTION 1: Detail Umum */}
             <div className="space-y-4">
@@ -396,7 +408,6 @@ export default function FacilitiesPage() {
                   <Input 
                     value={name} onChange={e => setName(e.target.value)} required 
                     placeholder="Contoh: Auditorium Utama"
-                    // PERBAIKAN: Menambahkan text-slate-900 agar teks input terlihat
                     className="bg-white text-slate-900 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20"
                   />
                 </div>
@@ -405,7 +416,6 @@ export default function FacilitiesPage() {
                   <Textarea 
                     value={description} onChange={e => setDescription(e.target.value)} required 
                     placeholder="Deskripsi singkat fasilitas..."
-                    // PERBAIKAN: Menambahkan text-slate-900 agar teks input terlihat
                     className="bg-white text-slate-900 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 resize-none h-20"
                   />
                 </div>
@@ -427,7 +437,6 @@ export default function FacilitiesPage() {
                   <Input 
                     value={location} onChange={e => setLocation(e.target.value)} required 
                     placeholder="Gedung, Lantai..."
-                    // PERBAIKAN: Menambahkan text-slate-900 agar teks input terlihat
                     className="bg-white text-slate-900 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20"
                   />
                 </div>
@@ -437,7 +446,6 @@ export default function FacilitiesPage() {
                     <Input 
                       type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required 
                       placeholder="0"
-                      // PERBAIKAN: Menambahkan text-slate-900 agar teks input terlihat
                       className="bg-white text-slate-900 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20 pr-12"
                     />
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium">Org</span>
@@ -450,7 +458,6 @@ export default function FacilitiesPage() {
                     <Input 
                       type="number" value={price} onChange={e => setPrice(e.target.value)} required 
                       placeholder="0"
-                      // PERBAIKAN: Menambahkan text-slate-900 agar teks input terlihat
                       className="pl-9 bg-white text-slate-900 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20"
                     />
                   </div>
@@ -469,7 +476,7 @@ export default function FacilitiesPage() {
                     <h3 className="text-sm font-semibold text-slate-900">Galeri Foto</h3>
                  </div>
                  <Badge variant="secondary" className="text-[10px] font-normal bg-blue-50 text-blue-700 hover:bg-blue-100">
-                    Max 4 Foto
+                   Max 4 Foto
                  </Badge>
               </div>
               
@@ -528,7 +535,8 @@ export default function FacilitiesPage() {
              <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} className="text-slate-600 hover:bg-slate-200/50">
                Batal
              </Button>
-             <Button type="submit" onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all active:scale-95">
+             {/* [FIX] Tambahkan form="facility-form" dan hapus onClick */}
+             <Button type="submit" form="facility-form" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all active:scale-95">
                {isEditing ? "Simpan Perubahan" : "Simpan Fasilitas"}
              </Button>
           </div>
