@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict fWqYr26NypQNC4F4Q6J9G0NJldRnoy9wkf5SGQ36NTgsEIYBhedIQCQIw1rfe8n
+\restrict ZAvbrhcwFiVKnbIqYxWIApzWUHwt2LibcRb3Nsg3bEqZKCoIPcjmIkRubcdt22l
 
 -- Dumped from database version 16.11 (Debian 16.11-1.pgdg13+1)
 -- Dumped by pg_dump version 18.0
 
--- Started on 2026-02-08 18:05:47
+-- Started on 2026-02-13 13:33:26
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -219,7 +219,7 @@ CREATE TABLE public.users (
     updated_by uuid,
     deleted_by uuid,
     deleted_at timestamp with time zone,
-    phone character varying(20),
+    phone character varying(100),
     is_phone_verified boolean DEFAULT false
 );
 
@@ -251,16 +251,19 @@ ALTER TABLE public.verification_codes OWNER TO campus_user;
 --
 
 COPY public.bookings (id, user_id, facility_id, start_time, end_time, status, rejection_reason, created_at, updated_at, created_by, updated_by, deleted_by, deleted_at, purpose, ticket_code, is_checked_in, checked_in_at, is_checked_out, checked_out_at, checkout_status, actual_end_time, attendance_status, review_comment, reviewed_at) FROM stdin;
-7e697495-ac3a-4923-a38c-ff43fcad78e2	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 04:56:00+00	2026-01-29 06:07:00+00	rejected	\N	2026-01-29 04:56:24.079472+00	2026-01-29 04:57:05.686845+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N			f	\N	f	\N	\N	\N	\N	\N	\N
-8234967f-7ffb-47ff-9dc6-179403371abe	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 05:05:00+00	2026-01-29 07:15:00+00	rejected	tes	2026-01-29 05:05:30.512183+00	2026-01-29 05:12:26.166855+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-8740fe12-b0d0-417a-85ed-4be1212391c8	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	8b6dd75a-f94d-4088-b6a1-c8595273fcc7	2026-01-29 05:12:00+00	2026-01-29 06:23:00+00	rejected	\N	2026-01-29 05:13:07.338181+00	2026-01-29 05:13:15.34787+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-610e4bda-e381-4351-900f-a4e0e54836c9	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	8b6dd75a-f94d-4088-b6a1-c8595273fcc7	2026-01-29 06:15:00+00	2026-01-29 07:25:00+00	rejected	tes	2026-01-29 06:15:43.713651+00	2026-01-29 06:16:06.690991+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-2b5ed930-b31e-4873-8fba-02e3c472402f	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 06:16:00+00	2026-01-29 07:27:00+00	rejected	\N	2026-01-29 06:16:38.158531+00	2026-01-29 06:16:51.777548+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-80e2c47b-ce28-445e-bb52-981907342abb	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 01:35:00+00	2026-01-29 03:48:00+00	completed	\N	2026-01-29 03:36:10.803314+00	2026-01-29 03:36:27.038729+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260129-IXKD3	t	2026-01-29 03:37:00.808246+00	t	2026-01-29 03:37:22.372546+00	\N	2026-01-29 03:37:22.372546+00	on_time	kipas rusak tes	2026-01-29 07:04:02.71466+00
-96764cba-8ecb-4c2e-b635-0bc1ba51da15	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 07:06:00+00	2026-01-29 08:17:00+00	pending	\N	2026-01-29 07:06:23.936274+00	2026-01-29 07:06:23.936274+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	\N	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-d7b9fe78-fa82-410b-a7cb-2edc24ba6c8f	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 10:09:00+00	2026-01-29 12:21:00+00	rejected	TES	2026-01-29 07:07:00.720421+00	2026-01-29 07:46:49.963951+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
-346cb833-a13c-4a41-acf3-00f7e7c0f4a1	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	d76ca801-d61a-492e-9a91-09a6053eec40	2026-01-29 01:33:00+00	2026-01-29 03:35:00+00	completed	\N	2026-01-29 03:30:17.786877+00	2026-01-29 03:30:36.112336+00	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260129-9GRHW	t	2026-01-29 03:31:09.626069+00	t	2026-01-29 03:35:04.743007+00	\N	2026-01-29 03:35:04.743007+00	late	TES	2026-01-29 07:47:57.77729+00
-1d23b4cb-e67c-470b-a140-c0af40e5def8	4fca815d-2f3d-4068-8b49-c57a3aa95e70	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 10:36:00+00	2026-02-09 11:46:00+00	canceled	User Account Deleted	2026-02-08 10:36:15.998353+00	2026-02-08 10:36:50.700207+00	4fca815d-2f3d-4068-8b49-c57a3aa95e70	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+7580b70c-cc6e-46db-8710-09a191399f68	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 05:42:00+00	2026-02-09 06:54:00+00	rejected	\N	2026-02-09 03:42:41.90264+00	2026-02-09 03:42:50.664046+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+2176a157-4441-4a4e-9a5f-b593e121566e	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 03:31:00+00	2026-02-09 04:43:00+00	rejected	\N	2026-02-09 03:34:29.154464+00	2026-02-09 03:42:53.226322+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+b45fefa3-6e47-4a50-8741-ea6eaab5ecf1	d6d3afe9-3199-4753-8d85-cfd47270d1eb	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 05:36:00+00	2026-02-09 06:47:00+00	canceled	User Account Deleted	2026-02-09 03:34:51.943364+00	2026-02-09 03:35:27.639591+00	d6d3afe9-3199-4753-8d85-cfd47270d1eb	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+5b569896-281f-4b4a-880e-c8129d67e556	a10e69c6-260a-4e38-b98e-ce1a091d7917	8b6dd75a-f94d-4088-b6a1-c8595273fcc7	2026-02-09 03:45:00+00	2026-02-09 04:56:00+00	canceled	\N	2026-02-09 03:45:45.360526+00	2026-02-09 04:00:17.657903+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	a10e69c6-260a-4e38-b98e-ce1a091d7917	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+8eddc8d3-29a6-404b-a710-c7e9a501f778	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 04:01:00+00	2026-02-09 05:11:00+00	completed	\N	2026-02-09 04:01:21.66091+00	2026-02-09 04:01:28.597264+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260209-Z4A0N	t	2026-02-09 04:08:06.17128+00	t	2026-02-09 04:08:31.052958+00	\N	2026-02-09 04:08:31.052958+00	on_time	gg\n	2026-02-09 04:09:36.856638+00
+e94e119d-bc3e-4e07-96cf-606e712cccfa	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-07 18:00:00+00	2026-02-08 16:10:00+00	completed	\N	2026-02-09 04:18:42.464472+00	2026-02-09 09:06:10.243047+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260209-Z2J5C	f	\N	f	\N	\N	2026-02-08 16:10:00+00	no_show	\N	\N
+05b87b08-73f6-4987-9990-53fe63e30641	cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-10 04:10:00+00	2026-02-10 05:10:00+00	rejected	\N	2026-02-09 04:23:23.207833+00	2026-02-10 04:01:23.958386+00	cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+1249fe3c-0f1c-43ba-8fd8-a03e1519c653	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-10 03:00:00+00	2026-02-10 04:10:00+00	rejected	\N	2026-02-09 04:14:55.59975+00	2026-02-10 04:01:26.459527+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+91259b8e-501e-4dd3-b43c-572ca68ca4dd	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-09 04:05:00+00	2026-02-09 05:16:00+00	completed	\N	2026-02-10 04:05:05.456858+00	2026-02-10 04:05:13.235737+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260210-YHV2K	f	\N	f	\N	\N	2026-02-09 05:16:00+00	no_show	\N	\N
+14be3a58-15b7-4998-bbfb-3b91556f1aee	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-10 04:01:00+00	2026-02-10 05:12:00+00	completed	\N	2026-02-10 04:01:44.622816+00	2026-02-10 04:01:53.851286+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260210-S6U4I	t	2026-02-10 04:03:09.915629+00	t	2026-02-10 05:12:21.01331+00	\N	2026-02-10 05:12:21.01331+00	late	\N	\N
+f3ad7239-4fb5-46ee-8ed4-a0d457aa88de	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-11 04:03:00+00	2026-02-11 05:14:00+00	completed	\N	2026-02-10 04:03:55.301388+00	2026-02-10 04:04:02.186063+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260210-BUHYD	f	\N	f	\N	\N	2026-02-11 05:14:00+00	no_show	\N	\N
+b4aaadb9-cf53-466e-8b1f-f77179660598	a10e69c6-260a-4e38-b98e-ce1a091d7917	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-13 03:53:00+00	2026-02-13 05:04:00+00	pending	\N	2026-02-13 03:54:09.975686+00	2026-02-13 03:54:09.975686+00	a10e69c6-260a-4e38-b98e-ce1a091d7917	\N	\N	\N		\N	f	\N	f	\N	\N	\N	\N	\N	\N
+f85910f6-406f-44ca-8981-6953658cf7a3	cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	d76ca801-d61a-492e-9a91-09a6053eec40	2026-02-13 03:49:00+00	2026-02-13 05:00:00+00	completed	\N	2026-02-13 03:49:51.034487+00	2026-02-13 03:50:52.573243+00	cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N		TK-20260213-I1X6T	t	2026-02-13 03:52:10.794168+00	t	2026-02-13 03:53:44.520513+00	\N	2026-02-13 03:53:44.520513+00	on_time	terima kasih	2026-02-13 03:56:14.286685+00
 \.
 
 
@@ -275,6 +278,7 @@ COPY public.facilities (id, name, capacity, price, photo_url, is_active, created
 1b76fdda-104b-4471-9e58-52dab1be681f	Laboratorium Komputer	50	0.00	{/uploads/1769398980-0-lab1.jpg}	t	2026-01-26 03:27:55.010864+00	2026-01-26 03:43:00.403828+00	0b246bff-7316-4a63-81e0-eded4008a58d	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N	Ruang praktikum yang berisi 40 unit PC spesifikasi tinggi (i7, 32GB RAM) dengan jaringan LAN gigabit. Dikhususkan untuk mata kuliah pemrograman, desain grafis, dan data mining.	Gedung B Lantai 2
 a623e819-6519-4092-b7b2-277921aa9230	Ruang Diskusi Perpustakaan	6	0.00	{/uploads/1769399160-0-perpus.jpg}	t	2026-01-26 03:30:08.685814+00	2026-01-26 03:46:00.354383+00	0b246bff-7316-4a63-81e0-eded4008a58d	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N	Ruangan kedap suara berkapasitas 6 orang yang terletak di lantai 2 perpustakaan. Dilengkapi dengan whiteboard, meja bundar, dan saklar listrik, cocok untuk kerja kelompok atau bimbingan skripsi.	Gedung C Lantai 3
 d76ca801-d61a-492e-9a91-09a6053eec40	Workshop Mesin Dasar	47	0.00	{/uploads/1769399432-0-mesin.jpg,"/uploads/1769399432-1-unnamed (1).jpg"}	t	2026-01-26 03:33:04.581878+00	2026-01-29 03:26:05.434404+00	0b246bff-7316-4a63-81e0-eded4008a58d	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N	Ruang bengkel luas dengan atap tinggi yang menampung mesin bubut, mesin bor duduk, dan area pengelasan. Wajib menggunakan APD (Alat Pelindung Diri) lengkap saat memasuki area ini.	Gedung D lantai 1
+862728e3-3079-47f0-bfcb-dd20b9dc1497	tes	100	-2.00	{"/uploads/1770619335-0-Screenshot (1018).png","/uploads/1770619335-1-Screenshot (1022).png","/uploads/1770619335-2-Screenshot (1038).png"}	f	2026-02-09 06:42:15.825954+00	2026-02-09 07:53:37.695121+00	0b246bff-7316-4a63-81e0-eded4008a58d	0b246bff-7316-4a63-81e0-eded4008a58d	\N	\N	tes	lt 1
 \.
 
 
@@ -285,11 +289,12 @@ d76ca801-d61a-492e-9a91-09a6053eec40	Workshop Mesin Dasar	47	0.00	{/uploads/1769
 --
 
 COPY public.profiles (id, user_id, full_name, phone_number, address, avatar_url, gender, identity_number, department, "position", created_at, updated_at) FROM stdin;
-edaf49e2-e7e8-4644-9ec3-1f72605fe38a	7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	sukoco praktono 	089999999	terra	/uploads/1769397701-avatar.jfif	L	22110011	teknik informatika	mahasiswa	2026-01-26 03:19:03.648376	2026-01-26 03:21:41.092764
-d9541cb6-6be1-45fc-8ae8-ebf124162d37	28909ba3-83bb-4d5f-bb88-b82952cd0bc6	\N	\N	\N	\N	\N	\N	\N	\N	2026-01-26 03:35:21.047656	2026-01-26 03:35:21.047656
-3707ca58-9bd6-4f60-a328-4767f1ea678f	9985b1a8-12ef-481f-81dc-92b81fb940ce	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-08 10:11:33.267136	2026-02-08 10:34:57.851751
-cdb27b46-9cc5-4e4b-91f7-50a0ea041655	4fca815d-2f3d-4068-8b49-c57a3aa95e70	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-08 10:34:41.25342	2026-02-08 10:36:50.700207
-381ab347-0a94-45d9-a041-52d9fd6d8199	f3e6d806-ab85-40c8-beba-4719d2c7880f	wxwxwx			/uploads/1770547439-avatar.png	L	sxwxwx	xwxwxwx	wxwwxwe	2026-02-08 10:37:42.596965	2026-02-08 10:43:59.198733
+a1832b53-679a-48ef-96c8-f6bd96ccf8ab	a10e69c6-260a-4e38-b98e-ce1a091d7917	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-09 02:54:19.515034	2026-02-09 02:54:19.515034
+b99d489f-076e-48e4-9054-9b0eee52b38f	2cd27c37-ec94-4b35-9131-d600dfdc9b23	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-09 02:58:20.419986	2026-02-09 03:01:14.309935
+34e150f9-1dba-494d-8e13-419391c3ef50	d6d3afe9-3199-4753-8d85-cfd47270d1eb	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-09 03:01:40.970502	2026-02-09 03:35:27.639591
+5272eb32-d168-41ae-861d-3744b1313606	cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-09 04:15:43.590373	2026-02-09 04:15:43.590373
+42c7babb-9e32-46cf-9eb4-cdcc90c241f0	e3e6712e-dea1-4373-bd00-11497ad763af	\N	\N	\N	\N	\N	\N	\N	\N	2026-02-10 03:10:45.358148	2026-02-10 03:10:45.358148
+caf51685-e409-4ca3-a435-0294490c9b5d	b1bac792-0fcc-407d-8459-1071601956db	egergreg	087790239132		/uploads/1770953193-avatar.png	L	rhreh	rgregrh	rehreh	2026-02-13 03:23:35.18268	2026-02-13 03:26:33.413687
 \.
 
 
@@ -301,11 +306,12 @@ cdb27b46-9cc5-4e4b-91f7-50a0ea041655	4fca815d-2f3d-4068-8b49-c57a3aa95e70	\N	\N	
 
 COPY public.users (id, name, email, password_hash, role, created_at, updated_at, created_by, updated_by, deleted_by, deleted_at, phone, is_phone_verified) FROM stdin;
 0b246bff-7316-4a63-81e0-eded4008a58d	admin	admin@admin.com	$2a$10$2p73INV.IiFeNnc4BPmwk.YoIjFD16EDlPolroLlmlPTqrvKRyQty	admin	2026-01-22 09:23:55.959548+00	2026-01-22 09:23:55.959548+00	\N	\N	\N	\N	\N	f
-9985b1a8-12ef-481f-81dc-92b81fb940ce	tes101 (Deleted 1770546898)	ceryover@gmail.com.deleted_1770546898	$2a$10$bdilpQWP9C464NwcwOrn8e2e96o/4exKs3yrmdKiN30SzS0QD6Tf2	user	2026-02-08 10:11:33.26041+00	2026-02-08 10:11:33.26041+00	\N	\N	0b246bff-7316-4a63-81e0-eded4008a58d	2026-02-08 10:34:57.851751+00	\N	f
-4fca815d-2f3d-4068-8b49-c57a3aa95e70	tes12 (Deleted 1770547011)	tes12@gmail.com.deleted_1770547011	$2a$10$2eS5lvgX3ji.s9MXYofNmeatHW45ycGng7mlcpw3Z7vr51dRmVYta	user	2026-02-08 10:34:41.246456+00	2026-02-08 10:34:41.246456+00	\N	\N	0b246bff-7316-4a63-81e0-eded4008a58d	2026-02-08 10:36:50.700207+00	\N	f
-f3e6d806-ab85-40c8-beba-4719d2c7880f	tes12	tes12@gmail.com	$2a$10$FA2whgfQRRUv3u7/C1AZqOIXQc7l7txOGWwgpY5EKKI./ePvbWlTW	user	2026-02-08 10:37:42.587956+00	2026-02-08 10:37:42.587956+00	\N	\N	\N	\N	\N	f
-28909ba3-83bb-4d5f-bb88-b82952cd0bc6	user2	user2@test.com	$2a$10$NlocMMBJPPcN7SICAFBjku7NgY4CO8yJS7F7TkmOlh/ksUTSeEXpm	user	2026-01-26 03:35:21.037401+00	2026-01-26 03:35:21.037401+00	\N	\N	\N	\N	\N	f
-7ba561b5-d92a-41b7-9ab8-5c8b100a6c37	user1	tes1@gmail.com	$2a$10$VAslhs8oOSc5xiqI59014.76MrWKbxQfH8yJl.o10i6NFc8gp8kHK	user	2026-01-26 03:19:03.642202+00	2026-02-08 07:25:05.151228+00	\N	\N	\N	\N	089999999	f
+a10e69c6-260a-4e38-b98e-ce1a091d7917	user1	user1@gmail.com	$2a$10$o6MpRevXeR/oHs/ME6.j0.UH5NbS8Ej.oRmUWVilrHG/lOE/kybB6	user	2026-02-09 02:54:19.504416+00	2026-02-09 02:54:19.504416+00	\N	\N	\N	\N	\N	f
+2cd27c37-ec94-4b35-9131-d600dfdc9b23	rieffzy (Deleted 1770606074)	083199837037@phone.users.deleted_1770606074	$2a$10$iAfNFf2iA4l4Xh2zTAdK..Vn43TETNMNfrFBox749ybrBDfT02bxm	user	2026-02-09 02:58:20.407223+00	2026-02-09 02:58:20.407223+00	\N	\N	0b246bff-7316-4a63-81e0-eded4008a58d	2026-02-09 03:01:14.309935+00	083199837037.deleted_1770606074	t
+d6d3afe9-3199-4753-8d85-cfd47270d1eb	user2 (Deleted 1770608128)	user2@test.com.deleted_1770608128	$2a$10$cjnWkBC..S/nGZ9ooicfN./Zo8CGQragwBeuCG6fjkW1tj6moR0nq	user	2026-02-09 03:01:40.857354+00	2026-02-09 03:01:40.857354+00	\N	\N	0b246bff-7316-4a63-81e0-eded4008a58d	2026-02-09 03:35:27.639591+00	\N	f
+cfaf00eb-3dfb-4ef2-ad41-b5f7ced325b4	user2	user2@gmail.com	$2a$10$VuLUYMycUIq9xTrYxE8wLuGzy22RjwAtYMds3/5LnbHiJybclYSuS	user	2026-02-09 04:15:43.583184+00	2026-02-09 08:39:54.09416+00	\N	\N	\N	\N	\N	f
+e3e6712e-dea1-4373-bd00-11497ad763af	user10	user10@gmail.com	$2a$10$dqr9MO36jqvW7wDdZL6uueITnuRZfqf9lwtbvbLJRgwKoWX.rsHWK	user	2026-02-10 03:10:45.337496+00	2026-02-10 03:10:45.337496+00	\N	\N	\N	\N	\N	f
+b1bac792-0fcc-407d-8459-1071601956db	rieffzy	087790239132@phone.users	$2a$10$mDNIXUW3YLl/Mc.PwTo9QO4SexMD3zDgclgR1oe9yS2o2aVEbGs/S	user	2026-02-13 03:23:35.173029+00	2026-02-13 03:23:35.173029+00	\N	\N	\N	\N	087790239132	t
 \.
 
 
@@ -317,13 +323,15 @@ f3e6d806-ab85-40c8-beba-4719d2c7880f	tes12	tes12@gmail.com	$2a$10$FA2whgfQRRUv3u
 
 COPY public.verification_codes (id, phone_number, code, type, expiration_time, created_at, used_at) FROM stdin;
 fa391554-2a9b-4441-9cc0-adb31a205b94	08	389153	register	2026-02-03 09:02:42.198125+00	2026-02-03 08:57:42.198125+00	\N
+3762f66c-16ea-4837-988a-a60240e4b03b	083199837037	157051	register	2026-02-13 03:24:23.877527+00	2026-02-13 03:19:23.877527+00	\N
+d5c41096-4ede-4e92-92b9-a3932ae3c552	083814132406	064011	register	2026-02-13 03:47:00.716476+00	2026-02-13 03:42:00.716476+00	\N
 bcc304f1-6ae8-4fb9-a9c4-e151061cc2f3	089617540306	884327	register	2026-02-03 09:15:29.468345+00	2026-02-03 09:10:29.468345+00	\N
 3aee1760-df16-4584-9a8f-c1f03ee4bbce	8u98798989080	280095	register	2026-02-04 02:41:41.032542+00	2026-02-04 02:36:41.032542+00	\N
 321bc21e-7c05-4545-b2ba-a39e51b03467	dsxdsxdsx	419174	register	2026-02-08 05:00:01.034232+00	2026-02-08 04:55:01.034232+00	\N
 3cc4f0c3-5cb3-4356-af35-120ef2cb9287	jnjnmkmkmk	740719	register	2026-02-08 05:03:17.444573+00	2026-02-08 04:58:17.444573+00	\N
 1a79e287-01fe-4f36-a681-2a5f16eb4329	jknjknjm	340945	register	2026-02-08 05:18:06.011123+00	2026-02-08 05:13:06.011123+00	\N
 85be0135-b4ae-4b98-9c39-17cd76406417	1234567890	238720	register	2026-02-08 05:36:29.261259+00	2026-02-08 05:31:29.261259+00	\N
-51cd93e7-1e17-4a8d-8f9f-984111641c76	087790239132	208205	register	2026-02-08 08:44:29.42026+00	2026-02-08 08:39:29.42026+00	\N
+d9d47c83-9744-47d7-a5af-6a7defda8fbd	081111111111	572191	register	2026-02-08 13:17:28.593089+00	2026-02-08 13:12:28.593089+00	\N
 \.
 
 
@@ -418,7 +426,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 3589 (class 2606 OID 99034)
+-- TOC entry 3589 (class 2606 OID 107219)
 -- Name: users users_phone_key; Type: CONSTRAINT; Schema: public; Owner: campus_user
 --
 
@@ -608,11 +616,11 @@ ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
 
 
--- Completed on 2026-02-08 18:05:48
+-- Completed on 2026-02-13 13:33:27
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fWqYr26NypQNC4F4Q6J9G0NJldRnoy9wkf5SGQ36NTgsEIYBhedIQCQIw1rfe8n
+\unrestrict ZAvbrhcwFiVKnbIqYxWIApzWUHwt2LibcRb3Nsg3bEqZKCoIPcjmIkRubcdt22l
 
