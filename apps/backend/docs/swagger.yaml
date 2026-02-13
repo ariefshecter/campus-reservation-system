@@ -1,9 +1,43 @@
 basePath: /
 definitions:
+  auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  auth.LoginResponse:
+    properties:
+      token:
+        type: string
+    type: object
+  auth.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
   auth.RequestOTPReq:
     properties:
       phone:
         example: "08123456789"
+        type: string
+    type: object
+  auth.UserResponse:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      role:
         type: string
     type: object
   auth.VerifyLoginReq:
@@ -30,6 +64,38 @@ definitions:
         example: "08123456789"
         type: string
     type: object
+  facility.Facility:
+    properties:
+      capacity:
+        type: integer
+      created_by_name:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      location:
+        type: string
+      name:
+        type: string
+      photo_url:
+        description: 'UBAH: string -> []string (Array)'
+        items:
+          type: string
+        type: array
+      price:
+        type: number
+      updated_by_name:
+        type: string
+    type: object
+  facility.ToggleStatusReq:
+    properties:
+      is_active:
+        example: true
+        type: boolean
+    type: object
 host: localhost:3000
 info:
   contact:
@@ -40,6 +106,40 @@ info:
   title: Campus Reservation API
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Masuk ke sistem untuk mendapatkan Token JWT.
+      parameters:
+      - description: Payload Login
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login User
+      tags:
+      - Auth
   /auth/login/request-otp:
     post:
       consumes:
@@ -106,6 +206,36 @@ paths:
       summary: Verifikasi OTP Login (WA)
       tags:
       - Auth WhatsApp
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Mendaftarkan user baru dengan Email & Password.
+      parameters:
+      - description: Payload Register
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register User Baru
+      tags:
+      - Auth
   /auth/register/request-otp:
     post:
       consumes:
@@ -164,6 +294,352 @@ paths:
               type: string
             type: object
       summary: Verifikasi OTP Register (WA)
+      tags:
+      - Auth WhatsApp
+  /facilities:
+    get:
+      description: Menampilkan daftar semua fasilitas yang tersedia.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/facility.Facility'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lihat Semua Fasilitas
+      tags:
+      - Facilities
+    post:
+      consumes:
+      - multipart/form-data
+      description: Menambahkan fasilitas baru lengkap dengan foto (Hanya Admin).
+      parameters:
+      - description: Nama Fasilitas
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Deskripsi
+        in: formData
+        name: description
+        required: true
+        type: string
+      - description: Lokasi
+        in: formData
+        name: location
+        required: true
+        type: string
+      - description: Kapasitas
+        in: formData
+        name: capacity
+        required: true
+        type: integer
+      - description: Harga per Jam
+        in: formData
+        name: price
+        required: true
+        type: number
+      - collectionFormat: multi
+        description: Upload Foto (Max 4)
+        in: formData
+        items:
+          type: file
+        name: photos
+        type: array
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tambah Fasilitas Baru
+      tags:
+      - Facilities
+  /facilities/{id}:
+    delete:
+      description: Menghapus fasilitas secara permanen (Hanya Admin).
+      parameters:
+      - description: ID Fasilitas
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Hapus Fasilitas
+      tags:
+      - Facilities
+    get:
+      description: Melihat detail satu fasilitas berdasarkan ID.
+      parameters:
+      - description: ID Fasilitas
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/facility.Facility'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Detail Fasilitas
+      tags:
+      - Facilities
+    put:
+      consumes:
+      - multipart/form-data
+      description: Mengubah data fasilitas (Full Update/PUT). Semua field teks WAJIB
+        diisi ulang.
+      parameters:
+      - description: ID Fasilitas
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Nama Fasilitas (Wajib)
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Deskripsi (Wajib)
+        in: formData
+        name: description
+        required: true
+        type: string
+      - description: Lokasi (Wajib)
+        in: formData
+        name: location
+        required: true
+        type: string
+      - description: Kapasitas (Wajib)
+        in: formData
+        name: capacity
+        required: true
+        type: integer
+      - description: Harga (Wajib)
+        in: formData
+        name: price
+        required: true
+        type: number
+      - collectionFormat: multi
+        description: Foto Baru (Opsional, jika diisi akan menimpa yang lama)
+        in: formData
+        items:
+          type: file
+        name: photos
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update Fasilitas
+      tags:
+      - Facilities
+  /facilities/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Mengubah status aktif fasilitas (Hanya Admin).
+      parameters:
+      - description: ID Fasilitas
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payload JSON
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/facility.ToggleStatusReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Aktif/Nonaktifkan Fasilitas
+      tags:
+      - Facilities
+  /me:
+    get:
+      description: Menampilkan detail profile user yang sedang login (Cek Token).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get My Profile
+      tags:
+      - Auth
+  /users/change-phone/request-otp:
+    post:
+      consumes:
+      - application/json
+      description: Kirim OTP ke nomor baru yang ingin digunakan user.
+      parameters:
+      - description: Nomor Baru
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RequestOTPReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OTP Terkirim
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Request OTP Ganti Nomor
+      tags:
+      - Auth WhatsApp
+  /users/change-phone/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verifikasi kode dan update nomor HP di database.
+      parameters:
+      - description: Nomor & Kode
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyLoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sukses
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verifikasi OTP Ganti Nomor
       tags:
       - Auth WhatsApp
 securityDefinitions:
